@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!eval/results"]
+		"includes": ["**", "!eval/results", "!eval/fixtures"]
 	},
 	"formatter": {
 		"enabled": true,

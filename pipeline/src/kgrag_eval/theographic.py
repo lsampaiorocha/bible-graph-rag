@@ -1,7 +1,7 @@
 import json
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from kgrag.corpus import fetch_theographic_file
 
@@ -97,6 +97,7 @@ class Gold:
     place_slug_by_id: dict[str, str]
     spans: dict[str, list[GoldMention]]
     dangling_links: int
+    events: dict[str, dict]
 
     def tags(self, scope: str) -> dict[str, set[tuple[str, str]]]:
         tags: dict[str, set[tuple[str, str]]] = {"person": set(), "place": set()}
@@ -113,9 +114,20 @@ class Gold:
 
 
 def load_gold() -> Gold:
-    verses = load_records("verses.json")
-    people = load_records("people.json")
-    places = load_records("places.json")
+    return gold_from_records(
+        load_records("verses.json"),
+        load_records("people.json"),
+        load_records("places.json"),
+        load_records("events.json"),
+    )
+
+
+def gold_from_records(
+    verses: dict[str, dict],
+    people: dict[str, dict],
+    places: dict[str, dict],
+    events: dict[str, dict],
+) -> Gold:
     people_by_slug = {fields["slug"]: fields for fields in people.values()}
     places_by_slug = {fields["slug"]: fields for fields in places.values()}
     known_slugs = {"person": people_by_slug, "place": places_by_slug}
@@ -139,4 +151,37 @@ def load_gold() -> Gold:
         },
         spans=spans,
         dangling_links=dangling_links,
+        events=events,
     )
+
+
+def apply_corrections(gold: Gold, corrections: dict) -> tuple[Gold, int]:
+    verses = dict(gold.verses)
+    spans = dict(gold.spans)
+    removed = 0
+    for rule in corrections.get("person_tag_removals") or []:
+        person_ids = {
+            record_id
+            for record_id, slug in gold.person_slug_by_id.items()
+            if slug == rule["slug"]
+        }
+        for record_id, verse in gold.verses.items():
+            if not person_ids & set(verse.get("people", [])):
+                continue
+            text = verse.get("verseText", "")
+            name_count = len(re.findall(rf"\b{re.escape(rule['name'])}\b", text))
+            if name_count == 0 or name_count != len(
+                re.findall(re.escape(rule["phrase"]), text)
+            ):
+                continue
+            verses[record_id] = {
+                **verse,
+                "people": [p for p in verse["people"] if p not in person_ids],
+            }
+            spans[verse["osisRef"]] = [
+                span
+                for span in spans.get(verse["osisRef"], [])
+                if not (span.kind == "person" and span.slug == rule["slug"])
+            ]
+            removed += 1
+    return replace(gold, verses=verses, spans=spans), removed

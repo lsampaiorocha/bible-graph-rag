@@ -1,0 +1,10 @@
+# Fixes to known errors in the Theographic answer key. Reports show scores with and
+# without them, so the raw numbers stay comparable with other work.
+#
+# person_tag_removals: drop a person's tag (and link) from verses where every mention of
+# their name sits inside the phrase. "Land of Canaan" names the place, but the key tags
+# Noah's grandson Canaan in 62 such verses.
+person_tag_removals:
+  - slug: canaan_914
+    name: Canaan
+    phrase: land of Canaan

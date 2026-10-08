@@ -5,13 +5,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
+import yaml
 
 from kgrag.build import INDEX_DIR
 from kgrag.corpus import CORPUS_DIR, REPO_ROOT, read_jsonl, read_passage_ids
-from kgrag.extract import extraction_dir
+from kgrag.extract import extraction_dir, load_extractions
 from kgrag.llm import ModelConfig
 from kgrag_eval.bakeoff import ConfigScore, load_extraction, score_passage
-from kgrag_eval.entities import EntityScore, score_entities
+from kgrag_eval.entities import score_entities
+from kgrag_eval.fixture import FIXTURE_DIR, make_fixture
+from kgrag_eval.fixture import SCOPE as FIXTURE_SCOPE
+from kgrag_eval.narrative import sample_narrative_edges, write_sample
+from kgrag_eval.report import build_report, entity_summary, render_report
 from kgrag_eval.theographic import (
     ALL_BOOKS,
     compute_gold_stats,
@@ -171,33 +176,6 @@ def bakeoff(
     typer.echo(f"written to {out_dir}")
 
 
-def entity_summary(index_id: str, score: EntityScore) -> dict:
-    return {
-        "index": index_id,
-        "aligned_mentions": score.mentions,
-        "bcubed_precision": score.bcubed_precision,
-        "bcubed_recall": score.bcubed_recall,
-        "bcubed_f1": score.bcubed_f1(),
-        "merge_errors": len(score.merge_errors),
-        "split_errors": len(score.split_errors),
-        "person_mention_f1": score.mention_f1["person"].f1(),
-        "place_mention_f1": score.mention_f1["place"].f1(),
-        "gender_accuracy": score.gender.value(),
-        "place_kind_accuracy": score.place_kind.value(),
-        "hard_cases_passed": sum(passed for _, passed, _ in score.hard_cases),
-        "hard_cases": [
-            {"case": case, "passed": passed, "detail": detail}
-            for case, passed, detail in score.hard_cases
-        ],
-        "merge_error_examples": [
-            {"entity": e.key, "gold": dict(e.parts)} for e in score.merge_errors[:10]
-        ],
-        "split_error_examples": [
-            {"gold": e.key, "entities": dict(e.parts)} for e in score.split_errors[:10]
-        ],
-    }
-
-
 def render_entity_markdown(
     summaries: list[dict], scope: str, dangling_links: int
 ) -> str:
@@ -302,3 +280,109 @@ def er(
     )
     typer.echo(markdown)
     typer.echo(f"written to {out_dir}")
+
+
+def load_index(index_id: str) -> tuple[dict, list[dict], list[dict]]:
+    meta = json.loads((INDEX_DIR / index_id / "meta.json").read_text(encoding="utf-8"))
+    return (
+        meta,
+        list(read_jsonl(INDEX_DIR / index_id / "entities.jsonl")),
+        list(read_jsonl(INDEX_DIR / index_id / "edges.jsonl")),
+    )
+
+
+@app.command()
+def report(
+    index_ids: list[str] = typer.Option(
+        ..., "--index", help="Index id such as gen-v1; repeat to compare."
+    ),
+) -> None:
+    """Full benchmark: entities, links, places, events and labelled narrative links, raw and corrected."""
+    gold = load_gold()
+    corrections = (
+        yaml.safe_load(
+            (REPO_ROOT / "eval" / "gold_corrections.yaml").read_text(encoding="utf-8")
+        )
+        or {}
+    )
+    reports = []
+    for index_id in index_ids:
+        meta, entities, edges = load_index(index_id)
+        reports.append(
+            build_report(
+                index_id,
+                meta["scope"],
+                entities,
+                edges,
+                gold,
+                corrections,
+                REPO_ROOT / "eval" / "labels" / f"narrative_sample_{index_id}.csv",
+            )
+        )
+    markdown = render_report(reports)
+    out_dir = (
+        REPO_ROOT / "eval" / "results" / "report" / f"{datetime.now(UTC):%Y%m%dT%H%M%S}"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "results.md").write_text(markdown, encoding="utf-8")
+    (out_dir / "results.json").write_text(
+        json.dumps(reports, indent=1), encoding="utf-8"
+    )
+    (REPO_ROOT / "eval" / "results" / "latest.json").write_text(
+        json.dumps(reports, indent=1), encoding="utf-8"
+    )
+    typer.echo(markdown)
+    typer.echo(f"written to {out_dir} and eval/results/latest.json")
+
+
+@app.command("narrative-sample")
+def narrative_sample(
+    index_id: str = typer.Option("gen-v1", "--index"),
+    size: int = typer.Option(100, help="How many narrative links to sample."),
+    seed: int = typer.Option(7, help="Fixed so the same sample comes back."),
+    force: bool = typer.Option(
+        False, help="Overwrite an existing sample, labels included."
+    ),
+) -> None:
+    """Write a CSV of random narrative links for hand-labelling."""
+    path = REPO_ROOT / "eval" / "labels" / f"narrative_sample_{index_id}.csv"
+    if path.exists() and not force:
+        raise typer.BadParameter(
+            f"{path} exists and may hold labels; pass --force to replace it"
+        )
+    _, entities, edges = load_index(index_id)
+    verse_text = {
+        verse["osis_ref"]: verse["text"]
+        for verse in read_jsonl(CORPUS_DIR / "verses.jsonl")
+    }
+    rows = sample_narrative_edges(entities, edges, verse_text, size, seed)
+    write_sample(path, rows)
+    typer.echo(f"wrote {len(rows)} links to {path}")
+    typer.echo(
+        "label each row in the label column: correct, wrong_type, wrong_direction or unsupported"
+    )
+
+
+@app.command()
+def fixture(
+    index_id: str = typer.Option("gen-v1", "--index"),
+    model: str = typer.Option("claude-haiku-5-5"),
+    effort: str = typer.Option("medium"),
+) -> None:
+    """Regenerate the Genesis regression fixture and its expected report after an intended change."""
+    passage_ids = [
+        p["id"]
+        for p in read_jsonl(CORPUS_DIR / "passages.jsonl")
+        if p["book"] == FIXTURE_SCOPE
+    ]
+    extractions, missing = load_extractions(ModelConfig(model, effort), passage_ids)
+    if missing:
+        raise typer.BadParameter(
+            f"{len(missing)} passages not extracted, e.g. {missing[0]}"
+        )
+    records = {
+        name: load_records(f"{name}.json")
+        for name in ("verses", "people", "places", "events")
+    }
+    make_fixture(extractions, INDEX_DIR / index_id / "er_audit.jsonl", records)
+    typer.echo(f"fixture written to {FIXTURE_DIR}")

@@ -1,0 +1,209 @@
+import { useEffect, useState } from "react";
+
+interface Score {
+	precision: number;
+	recall: number;
+	f1: number;
+	gold: number;
+}
+
+interface Section {
+	entities: Record<string, number | unknown[]>;
+	links: Record<string, Score>;
+	siblings_with_shared_parents: Score;
+	places: Record<string, Score>;
+	events: {
+		recall: number;
+		matched: number;
+		gold: number;
+		by_size: Record<string, { matched: number; gold: number }>;
+		participants: Score;
+	};
+}
+
+interface Report {
+	index: string;
+	scope: string;
+	corrected_verses: number;
+	raw: Section;
+	corrected: Section;
+	narrative: {
+		precision: number;
+		interval_95: [number, number];
+		labeled: number;
+		sampled: number;
+	} | null;
+}
+
+const ENTITY_ROWS: [string, string, boolean][] = [
+	["Entity resolution, B³ F1", "bcubed_f1", true],
+	["Merge errors (two people in one node)", "merge_errors", false],
+	["Split errors (one person in several nodes)", "split_errors", false],
+	["Person mentions F1", "person_mention_f1", true],
+	["Place mentions F1", "place_mention_f1", true],
+	["Gender accuracy", "gender_accuracy", true],
+	["Hard cases passed (of 6)", "hard_cases_passed", false],
+];
+
+const pct = (value: number) => `${(value * 100).toFixed(1)}`;
+
+function Table({
+	head,
+	rows,
+}: {
+	head: string[];
+	rows: (string | number)[][];
+}) {
+	return (
+		<table className="w-full border-collapse text-sm">
+			<thead>
+				<tr>
+					{head.map((cell) => (
+						<th
+							key={cell}
+							className="border-b border-gray-300 px-2 py-1 text-left font-medium text-gray-600"
+						>
+							{cell}
+						</th>
+					))}
+				</tr>
+			</thead>
+			<tbody>
+				{rows.map((row) => (
+					<tr key={String(row[0])} className="border-b border-gray-100">
+						{row.map((cell, index) => (
+							<td
+								key={`${row[0]}-${head[index]}`}
+								className={`px-2 py-1 ${index ? "tabular-nums" : ""}`}
+							>
+								{cell}
+							</td>
+						))}
+					</tr>
+				))}
+			</tbody>
+		</table>
+	);
+}
+
+export function BenchmarkPage() {
+	const [reports, setReports] = useState<Report[] | null>(null);
+	const [error, setError] = useState<string | null>(null);
+
+	useEffect(() => {
+		fetch("/api/eval")
+			.then(async (response) => {
+				const body = await response.json();
+				if (!response.ok) throw new Error(body.error);
+				setReports(body);
+			})
+			.catch((reason: Error) => setError(reason.message));
+	}, []);
+
+	if (error) return <p className="p-6 text-sm text-red-700">{error}</p>;
+	if (!reports)
+		return (
+			<p className="p-6 text-sm text-gray-500">Loading the latest benchmark…</p>
+		);
+
+	const head = ["Measure", ...reports.map((report) => report.index)];
+	const each = <T,>(pick: (report: Report) => T) => reports.map(pick);
+	return (
+		<div className="mx-auto flex max-w-4xl flex-col gap-6 overflow-auto p-6">
+			<div>
+				<h2 className="text-lg font-semibold">
+					How the extracted graph scores against an expert-made answer key
+				</h2>
+				<p className="text-sm text-gray-600">
+					Scope {reports[0]?.scope}. The answer key is Theographic Bible
+					Metadata, used only for grading. Scores are percentages after{" "}
+					{reports[0]?.corrected_verses} documented answer-key corrections; F1
+					combines precision and recall.
+				</p>
+			</div>
+			<section>
+				<h3 className="mb-1 font-medium">Entities</h3>
+				<Table
+					head={head}
+					rows={ENTITY_ROWS.map(([label, key, isShare]) => [
+						label,
+						...each((report) => {
+							const value = report.corrected.entities[key] as number;
+							return isShare ? pct(value) : value;
+						}),
+					])}
+				/>
+			</section>
+			<section>
+				<h3 className="mb-1 font-medium">
+					Family links (F1, answer-key count in brackets)
+				</h3>
+				<Table
+					head={head}
+					rows={[
+						...Object.keys(reports[0]?.corrected.links ?? {}).map((type) => [
+							type,
+							...each((report) => {
+								const score = report.corrected.links[type];
+								return score ? `${pct(score.f1)} (${score.gold})` : "";
+							}),
+						]),
+						[
+							"SIBLING_OF incl. shared parents",
+							...each(
+								(report) =>
+									`${pct(report.corrected.siblings_with_shared_parents.f1)} (${report.corrected.siblings_with_shared_parents.gold})`,
+							),
+						],
+					]}
+				/>
+			</section>
+			<section>
+				<h3 className="mb-1 font-medium">Events</h3>
+				<Table
+					head={head}
+					rows={[
+						[
+							"Found (recall)",
+							...each(
+								(r) =>
+									`${pct(r.corrected.events.recall)} (${r.corrected.events.matched}/${r.corrected.events.gold})`,
+							),
+						],
+						...Object.keys(reports[0]?.corrected.events.by_size ?? {}).map(
+							(label) => [
+								`  ${label}`,
+								...each((r) => {
+									const bucket = r.corrected.events.by_size[label];
+									return bucket ? `${bucket.matched}/${bucket.gold}` : "";
+								}),
+							],
+						),
+						[
+							"Participants F1",
+							...each((r) => pct(r.corrected.events.participants.f1)),
+						],
+					]}
+				/>
+			</section>
+			<section>
+				<h3 className="mb-1 font-medium">
+					Narrative links (hand-labelled sample)
+				</h3>
+				<Table
+					head={head}
+					rows={[
+						[
+							"Precision (95% interval)",
+							...each((r) =>
+								r.narrative
+									? `${pct(r.narrative.precision)} (${pct(r.narrative.interval_95[0])}–${pct(r.narrative.interval_95[1])}), ${r.narrative.labeled} labelled`
+									: "not labelled yet",
+							),
+						],
+					]}
+				/>
+			</section>
+		</div>
+	);
+}

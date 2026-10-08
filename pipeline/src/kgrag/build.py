@@ -32,6 +32,7 @@ def build_index(
     extractions: list[dict],
     resolution: dict[OccurrenceKey, str],
     verse_order: dict[str, int],
+    layout: bool = True,
 ) -> tuple[list[dict], list[dict]]:
     entities: dict[str, dict] = {}
     edges: dict[tuple, dict] = {}
@@ -201,7 +202,8 @@ def build_index(
         }
         for edge in edges.values()
     ]
-    add_graph_layout(finished_entities, finished_edges)
+    if layout:
+        add_graph_layout(finished_entities, finished_edges)
     return (
         sorted(finished_entities, key=lambda entity: entity["id"]),
         sorted(finished_edges, key=lambda edge: edge["id"]),

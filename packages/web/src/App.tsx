@@ -1,6 +1,7 @@
 import type { RetrievalTrace } from "@kgrag/retrieval";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { AnswerPanel } from "./AnswerPanel.tsx";
+import { BenchmarkPage } from "./BenchmarkPage.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
 import {
 	type GraphData,
@@ -29,6 +30,7 @@ export function App() {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [tab, setTab] = useState<PanelTab>("answer");
 	const [useLlm, setUseLlm] = useState(true);
+	const [page, setPage] = useState<"explore" | "benchmark">("explore");
 	const [elapsed, setElapsed] = useState(0);
 	const labelById = useMemo(
 		() => new Map(graph?.nodes.map((node) => [node.id, node.label])),
@@ -104,6 +106,18 @@ export function App() {
 						? `${graph.indexId} · ${graph.nodes.length} entities`
 						: "loading…"}
 				</span>
+				<div className="flex overflow-hidden rounded border border-gray-300 text-xs">
+					{(["explore", "benchmark"] as const).map((option) => (
+						<button
+							key={option}
+							type="button"
+							onClick={() => setPage(option)}
+							className={`px-2 py-1 ${page === option ? "bg-gray-900 text-white" : "hover:bg-gray-100"}`}
+						>
+							{option === "explore" ? "Explore" : "Benchmark"}
+						</button>
+					))}
+				</div>
 				<div className="ml-auto flex items-center gap-4">
 					<div className="flex gap-3 text-xs">
 						{Object.entries(KIND_COLORS).map(([kind, color]) => (
@@ -130,7 +144,10 @@ export function App() {
 					</div>
 				</div>
 			</header>
-			<div className="flex min-h-0 flex-1">
+			{page === "benchmark" && <BenchmarkPage />}
+			<div
+				className={`min-h-0 flex-1 ${page === "explore" ? "flex" : "hidden"}`}
+			>
 				<aside className="flex w-[440px] shrink-0 flex-col gap-3 border-r border-gray-200 p-4">
 					<form onSubmit={submit} className="flex gap-2">
 						<input

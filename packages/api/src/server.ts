@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { runAgent, runLocal } from "@kgrag/retrieval";
 import { Hono } from "hono";
@@ -8,6 +10,9 @@ import { embedQuery } from "./embedder.ts";
 import { Neo4jGraphSource } from "./neo4jGraphSource.ts";
 
 const PORT = 8787;
+const LATEST_REPORT = fileURLToPath(
+	new URL("../../../eval/results/latest.json", import.meta.url),
+);
 const QueryRequest = z.object({
 	text: z.string().min(1).max(500),
 	mode: z.enum(["local", "agent"]),
@@ -35,6 +40,14 @@ const llm = new ClaudeCliClient({
 });
 
 const app = new Hono();
+app.get("/api/eval", (context) =>
+	existsSync(LATEST_REPORT)
+		? context.json(JSON.parse(readFileSync(LATEST_REPORT, "utf-8")))
+		: context.json(
+				{ error: "no report yet; run uv run kgrag-eval report --index gen-v1" },
+				404,
+			),
+);
 app.get("/api/graph", async (context) =>
 	context.json(await source.graphView()),
 );

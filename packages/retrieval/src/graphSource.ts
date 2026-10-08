@@ -23,6 +23,13 @@ export interface VectorHit {
 	score: number;
 }
 
+export interface PassageHit {
+	id: string;
+	text: string;
+	score: number;
+	verseRefs: string[];
+}
+
 export type Embedder = (text: string) => Promise<number[]>;
 
 // Neo4j reports cosine similarity rescaled to 0..1 as (1 + cos) / 2; the in-memory source
@@ -111,6 +118,8 @@ export interface GraphSource {
 		ids: string[],
 		vector: number[],
 	): Promise<Record<string, number>>;
+	// Nearest passages to a vector, for the plain vector-RAG baseline.
+	passagesByVector(vector: number[], limit: number): Promise<PassageHit[]>;
 	entityCards(ids: string[]): Promise<EntityCard[]>;
 	edgeDetails(ids: string[]): Promise<EdgeDetail[]>;
 	verses(refs: string[]): Promise<{ id: string; text: string }[]>;
@@ -140,6 +149,12 @@ export interface MemoryGraph {
 	}[];
 	aliases: { key: string; nodeId: string }[];
 	verses?: Record<string, string>;
+	passages?: {
+		id: string;
+		text: string;
+		verseRefs: string[];
+		embedding: number[];
+	}[];
 }
 
 const PARENT_TYPES = new Set(["FATHER_OF", "MOTHER_OF"]);
@@ -331,6 +346,21 @@ export class MemoryGraphSource implements GraphSource {
 				return embedding ? [[id, cosineScore(embedding, vector)]] : [];
 			}),
 		);
+	}
+
+	async passagesByVector(
+		vector: number[],
+		limit: number,
+	): Promise<PassageHit[]> {
+		return (this.graph.passages ?? [])
+			.map((passage) => ({
+				id: passage.id,
+				text: passage.text,
+				score: cosineScore(passage.embedding, vector),
+				verseRefs: passage.verseRefs,
+			}))
+			.sort((a, b) => b.score - a.score || compareText(a.id, b.id))
+			.slice(0, limit);
 	}
 
 	async entityCards(ids: string[]): Promise<EntityCard[]> {

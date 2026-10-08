@@ -8,6 +8,7 @@ import {
 	type LinkRow,
 	MAX_LINEAGE_DEPTH,
 	MAX_LINEAGE_LINKS,
+	type PassageHit,
 	type Relation,
 	type VectorHit,
 } from "@kgrag/retrieval";
@@ -222,6 +223,24 @@ export class Neo4jGraphSource implements GraphSource {
 			{ ids, vector },
 		);
 		return Object.fromEntries(rows.map((row) => [row.id, row.score]));
+	}
+
+	async passagesByVector(
+		vector: number[],
+		limit: number,
+	): Promise<PassageHit[]> {
+		return this.rows<PassageHit>(
+			`MATCH (p:Passage)
+			   SEARCH p IN (VECTOR INDEX passage_embedding FOR $vector LIMIT $limit) SCORE AS score
+			 CALL (p) {
+			   MATCH (p)-[:CONTAINS]->(v:Verse)
+			   WITH v ORDER BY v.ordinal
+			   RETURN collect(v.id) AS verseRefs
+			 }
+			 RETURN p.id AS id, p.text AS text, score, verseRefs
+			 ORDER BY score DESC, id`,
+			{ vector, limit: neo4j.int(limit) },
+		);
 	}
 
 	async entityCards(ids: string[]): Promise<EntityCard[]> {

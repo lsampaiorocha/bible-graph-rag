@@ -8,15 +8,25 @@ import typer
 import yaml
 
 from kgrag.build import INDEX_DIR
+from kgrag.cli import project_budget_usd
 from kgrag.corpus import CORPUS_DIR, REPO_ROOT, read_jsonl, read_passage_ids
 from kgrag.extract import extraction_dir, load_extractions
-from kgrag.llm import ModelConfig
+from kgrag.llm import Budget, BudgetExceeded, ClaudeCodeClient, Ledger, ModelConfig
 from kgrag_eval.bakeoff import ConfigScore, load_extraction, score_passage
 from kgrag_eval.entities import score_entities
 from kgrag_eval.fixture import FIXTURE_DIR, make_fixture
 from kgrag_eval.fixture import SCOPE as FIXTURE_SCOPE
 from kgrag_eval.narrative import sample_narrative_edges, write_sample
 from kgrag_eval.report import build_report, entity_summary, render_report
+from kgrag_eval.score_qa import (
+    JUDGE_PURPOSE,
+    judge_rows,
+    load_run,
+    read_human_grades,
+    score_trace,
+    summarize,
+    write_grades,
+)
 from kgrag_eval.theographic import (
     ALL_BOOKS,
     compute_gold_stats,
@@ -386,3 +396,70 @@ def fixture(
     }
     make_fixture(extractions, INDEX_DIR / index_id / "er_audit.jsonl", records)
     typer.echo(f"fixture written to {FIXTURE_DIR}")
+
+
+@app.command()
+def qa(
+    run_id: str = typer.Option(..., "--run", help="Folder name under eval/runs."),
+    judge_model: str = typer.Option("claude-sonnet-5-5"),
+    judge_effort: str = typer.Option("medium"),
+    run_budget_usd: float = typer.Option(1.0),
+    workers: int = typer.Option(4),
+) -> None:
+    """Score a run of eval/questions.yaml: LLM-judged accuracy, verse recall, citations, tokens, latency and cost."""
+    questions = {
+        question["id"]: question
+        for question in yaml.safe_load(
+            (REPO_ROOT / "eval" / "questions.yaml").read_text(encoding="utf-8")
+        )
+    }
+    passage_verses = {
+        passage["id"]: passage["verse_refs"]
+        for passage in read_jsonl(CORPUS_DIR / "passages.jsonl")
+    }
+    rows = [
+        score_trace(trace, questions[question_id], passage_verses)
+        for trace in load_run(REPO_ROOT / "eval" / "runs" / run_id)
+        for question_id in [trace_question_id(trace, questions)]
+    ]
+    ledger = Ledger()
+    try:
+        budget = Budget(run_budget_usd, project_budget_usd(), 0.10, ledger.total_cost())
+    except BudgetExceeded as error:
+        raise typer.Exit(f"stopped: {error}") from error
+    client = ClaudeCodeClient(
+        ModelConfig(judge_model, judge_effort),
+        budget=budget,
+        ledger=ledger,
+        run_id=f"qa-{run_id}",
+        purpose=JUDGE_PURPOSE,
+    )
+    judge_rows(client, rows, questions, workers)
+    grades_path = REPO_ROOT / "eval" / "labels" / f"qa_grades_{run_id}.csv"
+    human = read_human_grades(grades_path)
+    write_grades(grades_path, rows, questions, human)
+    summary = {
+        "run": run_id,
+        "judge": f"{judge_model} {judge_effort}",
+        "judge_cost_usd": round(sum(row["judge_cost_usd"] for row in rows), 4),
+        **summarize(rows, human),
+    }
+    out_dir = REPO_ROOT / "eval" / "results" / "qa" / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "summary.json").write_text(
+        json.dumps(summary, indent=1), encoding="utf-8"
+    )
+    (out_dir / "rows.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
+    (REPO_ROOT / "eval" / "results" / "qa_latest.json").write_text(
+        json.dumps(summary, indent=1), encoding="utf-8"
+    )
+    typer.echo(json.dumps(summary, indent=1))
+    typer.echo(f"grades for review: {grades_path.relative_to(REPO_ROOT)}")
+
+
+def trace_question_id(trace: dict, questions: dict[str, dict]) -> str:
+    return next(
+        question_id
+        for question_id, question in questions.items()
+        if question["question"] == trace["query"]["text"]
+    )

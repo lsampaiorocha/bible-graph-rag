@@ -1,0 +1,77 @@
+{
+ "run": "20261008T230133",
+ "judge": "claude-sonnet-5-5 medium",
+ "judge_cost_usd": 0.4667,
+ "questions": 25,
+ "modes": {
+  "agent": {
+   "accuracy": 0.92,
+   "verdicts": {
+    "correct": 22,
+    "partial": 2,
+    "no_answer": 1
+   },
+   "by_category": {
+    "memory_trap": 1.0,
+    "multi_hop": 1.0,
+    "open": 0.625,
+    "path": 1.0,
+    "single_hop": 0.9167
+   },
+   "verse_recall": 0.8167,
+   "cited_verse_recall": 0.7989,
+   "invalid_citation_rate": 0.0,
+   "mean_input_tokens": 5853,
+   "mean_latency_s": 10.21,
+   "cost_usd": 0.0333,
+   "failed": 0
+  },
+  "closed_book": {
+   "accuracy": 1.0,
+   "verdicts": {
+    "correct": 25
+   },
+   "by_category": {
+    "memory_trap": 1.0,
+    "multi_hop": 1.0,
+    "open": 1.0,
+    "path": 1.0,
+    "single_hop": 1.0
+   },
+   "verse_recall": null,
+   "cited_verse_recall": null,
+   "invalid_citation_rate": null,
+   "mean_input_tokens": 1580,
+   "mean_latency_s": 5.17,
+   "cost_usd": 0.0105,
+   "failed": 0
+  },
+  "vector": {
+   "accuracy": 0.66,
+   "verdicts": {
+    "correct": 16,
+    "no_answer": 7,
+    "partial": 1,
+    "wrong": 1
+   },
+   "by_category": {
+    "memory_trap": 0.8,
+    "multi_hop": 0.5,
+    "open": 0.625,
+    "path": 0.5,
+    "single_hop": 0.8333
+   },
+   "verse_recall": 0.5422,
+   "cited_verse_recall": 0.5422,
+   "invalid_citation_rate": 0.0,
+   "mean_input_tokens": 5083,
+   "mean_latency_s": 5.88,
+   "cost_usd": 0.0319,
+   "failed": 0
+  }
+ },
+ "judge_vs_human": {
+  "graded": 0,
+  "kappa": null
+ }
+}

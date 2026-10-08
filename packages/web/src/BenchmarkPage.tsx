@@ -86,6 +86,86 @@ function Table({
 	);
 }
 
+interface QaMode {
+	accuracy: number;
+	verdicts: Record<string, number>;
+	by_category: Record<string, number>;
+	verse_recall: number | null;
+	invalid_citation_rate: number | null;
+	mean_input_tokens: number;
+	mean_latency_s: number;
+	cost_usd: number;
+}
+
+interface QaSummary {
+	run: string;
+	judge: string;
+	questions: number;
+	modes: Record<string, QaMode>;
+}
+
+const QA_MODES: [string, string][] = [
+	["agent", "Graph agent"],
+	["vector", "Vector RAG"],
+	["closed_book", "LLM from memory"],
+];
+
+function QaSection() {
+	const [summary, setSummary] = useState<QaSummary | null>(null);
+
+	useEffect(() => {
+		fetch("/api/eval/qa")
+			.then((response) => (response.ok ? response.json() : null))
+			.then(setSummary)
+			.catch(() => setSummary(null));
+	}, []);
+
+	if (!summary) return null;
+	const modes = QA_MODES.filter(([key]) => summary.modes[key]);
+	const each = (pick: (mode: QaMode) => string | number) =>
+		modes.map(([key]) => pick(summary.modes[key] as QaMode));
+	const orDash = (value: number | null) => (value === null ? "–" : pct(value));
+	const categories = Object.keys(summary.modes.agent?.by_category ?? {});
+	return (
+		<section>
+			<h3 className="mb-1 font-medium">
+				Answer quality on {summary.questions} Genesis questions
+			</h3>
+			<p className="mb-2 text-sm text-gray-600">
+				Same answering model and prompt in every column; only the retrieval
+				differs. Graded by {summary.judge} against reference answers (correct =
+				1, partial = ½). Verse recall = share of the reference verses that
+				reached the model.
+			</p>
+			<Table
+				head={["Measure", ...modes.map(([, label]) => label)]}
+				rows={[
+					["Accuracy", ...each((mode) => pct(mode.accuracy))],
+					...categories.map((category) => [
+						`  ${category.replace("_", " ")}`,
+						...each((mode) => pct(mode.by_category[category] ?? 0)),
+					]),
+					[
+						"Declined to answer",
+						...each((mode) => mode.verdicts.no_answer ?? 0),
+					],
+					["Verse recall", ...each((mode) => orDash(mode.verse_recall))],
+					[
+						"Invalid citations",
+						...each((mode) => orDash(mode.invalid_citation_rate)),
+					],
+					["Input tokens (mean)", ...each((mode) => mode.mean_input_tokens)],
+					["Latency, s (mean)", ...each((mode) => mode.mean_latency_s)],
+					[
+						"Cost for all questions",
+						...each((mode) => `$${mode.cost_usd.toFixed(3)}`),
+					],
+				]}
+			/>
+		</section>
+	);
+}
+
 export function BenchmarkPage() {
 	const [reports, setReports] = useState<Report[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -110,6 +190,7 @@ export function BenchmarkPage() {
 	const each = <T,>(pick: (report: Report) => T) => reports.map(pick);
 	return (
 		<div className="mx-auto flex max-w-4xl flex-col gap-6 overflow-auto p-6">
+			<QaSection />
 			<div>
 				<h2 className="text-lg font-semibold">
 					How the extracted graph scores against an expert-made answer key

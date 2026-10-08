@@ -1,0 +1,184 @@
+# Genesis questions for the answer benchmark (M8).
+# Each has a short gold answer, the verses that state it and the answer-key people it names.
+# Drafted from the Theographic answer key and checked against the KJV text; review welcome.
+# Categories:
+#   single_hop   one family link
+#   multi_hop    two or more links (grandparents, great-grandparents, in-laws)
+#   path         how two people are related
+#   memory_trap  obscure genealogy where answering from memory tends to slip
+#   open         a happening or a reason, not a family link
+
+- id: q01
+  category: single_hop
+  question: Who was the father of Methuselah?
+  answer: Enoch.
+  verses: [Gen.5.21]
+  people: [enoch_1192, methuselah_2042]
+
+- id: q02
+  category: single_hop
+  question: Who were the sons of Noah?
+  answer: Shem, Ham and Japheth.
+  verses: [Gen.5.32]
+  people: [shem_2613, ham_1359, japheth_726]
+
+- id: q03
+  category: single_hop
+  question: Who was the wife of Isaac?
+  answer: Rebekah.
+  verses: [Gen.24.67]
+  people: [rebekah_2401, isaac_616]
+
+- id: q04
+  category: single_hop
+  question: Who was the mother of Ishmael?
+  answer: Hagar.
+  verses: [Gen.16.15]
+  people: [hagar_1348, ishmael_630]
+
+- id: q05
+  category: single_hop
+  question: Who did Jacob take as wives?
+  answer: Leah and Rachel, and also their handmaids Bilhah and Zilpah.
+  verses: [Gen.29.23, Gen.29.28, Gen.30.4, Gen.30.9]
+  people: [leah_1813, rachel_2386, bilhah_502, zilpah_3081]
+
+- id: q06
+  category: single_hop
+  question: Who was the father of Laban?
+  answer: Bethuel the Syrian.
+  verses: [Gen.28.5]
+  people: [bethuel_487, laban_1803]
+
+- id: q07
+  category: multi_hop
+  question: Who was the grandfather of Abraham?
+  answer: Nahor, the father of Terah, who was Abraham's father.
+  verses: [Gen.11.24, Gen.11.26]
+  people: [nahor_2142, terah_2841, abraham_58]
+
+- id: q08
+  category: multi_hop
+  question: Who was Joseph's grandmother on his father's side?
+  answer: Rebekah, the mother of Jacob, who was Joseph's father.
+  verses: [Gen.28.5, Gen.35.22, Gen.35.24]
+  people: [rebekah_2401, israel_682, joseph_1710]
+
+- id: q09
+  category: multi_hop
+  question: Who was Lot's grandfather?
+  answer: Terah, the father of Haran, who was Lot's father.
+  verses: [Gen.11.27]
+  people: [terah_2841, haran_1407, lot_1830]
+
+- id: q10
+  category: multi_hop
+  question: Who was the father of Esau's wife Adah?
+  answer: Elon the Hittite.
+  verses: [Gen.36.2]
+  people: [elon_1182, adah_414, esau_1216]
+
+- id: q11
+  category: multi_hop
+  question: Who was Noah's great-grandfather?
+  answer: Enoch, father of Methuselah, father of Lamech, father of Noah.
+  verses: [Gen.5.21, Gen.5.25, Gen.5.28, Gen.5.29]
+  people: [enoch_1192, methuselah_2042, lamech_1809, noah_2210]
+
+- id: q12
+  category: multi_hop
+  question: Who was Jacob's uncle on his mother's side?
+  answer: Laban, the brother of Rebekah.
+  verses: [Gen.28.2, Gen.28.5]
+  people: [laban_1803, rebekah_2401, israel_682]
+
+- id: q13
+  category: path
+  question: How is Lot related to Abraham?
+  answer: Lot is Abraham's nephew, the son of Abraham's brother Haran.
+  verses: [Gen.11.27, Gen.12.5]
+  people: [lot_1830, haran_1407, abraham_58]
+
+- id: q14
+  category: path
+  question: How is Laban related to Rebekah?
+  answer: Laban is Rebekah's brother.
+  verses: [Gen.24.29]
+  people: [laban_1803, rebekah_2401]
+
+- id: q15
+  category: path
+  question: How is Jacob related to Esau?
+  answer: They are twin brothers, sons of Isaac and Rebekah; Esau was born first.
+  verses: [Gen.25.24, Gen.25.25, Gen.25.26]
+  people: [israel_682, esau_1216]
+
+- id: q16
+  category: path
+  question: How is Noah connected to Adam?
+  answer: Noah descends from Adam through Seth, Enos, Cainan, Mahalaleel, Jared, Enoch, Methuselah and Lamech.
+  verses: [Gen.5.3, Gen.5.6, Gen.5.9, Gen.5.12, Gen.5.15, Gen.5.18, Gen.5.21, Gen.5.25, Gen.5.29]
+  people: [noah_2210, lamech_1809, methuselah_2042, enoch_1192, jared_730, mahalaleel_1885, cainan_534, enos_1193, seth_2504, adam_78]
+
+- id: q17
+  category: memory_trap
+  question: Who was the father of Mehujael?
+  answer: Irad.
+  verses: [Gen.4.18]
+  people: [irad_611, mehujael_1983]
+
+- id: q18
+  category: memory_trap
+  question: Who were the sons Keturah bore to Abraham?
+  answer: Zimran, Jokshan, Medan, Midian, Ishbak and Shuah.
+  verses: [Gen.25.1, Gen.25.2]
+  people: [zimran_3086, jokshan_1685, medan_1978, midian_2075, ishbak_620, shuah_2727]
+
+- id: q19
+  category: memory_trap
+  question: Who was the father of the Lamech who descended from Cain?
+  answer: Methusael.
+  verses: [Gen.4.18]
+  people: [methusael_2041, lamech_1808]
+
+- id: q20
+  category: memory_trap
+  question: Who were the wives of Lamech in the line of Cain?
+  answer: Adah and Zillah.
+  verses: [Gen.4.19]
+  people: [adah_69, zillah_3080, lamech_1808]
+
+- id: q21
+  category: memory_trap
+  question: Who was the firstborn son of Ishmael?
+  answer: Nebajoth.
+  verses: [Gen.25.13]
+  people: [nebajoth_2164, ishmael_630]
+
+- id: q22
+  category: open
+  question: What happened at Bethel?
+  answer: Abram pitched his tent east of Bethel and built an altar there, and returned to it later; Jacob named the place Bethel (formerly Luz) and God spoke with him there again.
+  verses: [Gen.12.8, Gen.13.3, Gen.28.19, Gen.35.15]
+  people: [abraham_58, israel_682]
+
+- id: q23
+  category: open
+  question: Why did Jacob flee to Haran?
+  answer: Esau hated him for taking their father's blessing and planned to kill him, so Rebekah sent him to her brother Laban in Haran.
+  verses: [Gen.27.41, Gen.27.43]
+  people: [israel_682, esau_1216, rebekah_2401, laban_1803]
+
+- id: q24
+  category: open
+  question: What did God promise Abram?
+  answer: To make him a great nation and bless him, to give the land to his seed, seed as many as the stars, and to make him a father of many nations.
+  verses: [Gen.12.2, Gen.12.7, Gen.15.5, Gen.17.5]
+  people: [abraham_58, god_1324]
+
+- id: q25
+  category: open
+  question: Who sold Joseph, and to whom?
+  answer: He was sold to the Ishmeelites for twenty pieces of silver, after Judah urged his brothers to sell him rather than kill him; Midianite merchantmen were passing by. The KJV leaves open whether the brothers or the Midianites lifted him from the pit, so either seller counts.
+  verses: [Gen.37.26, Gen.37.27, Gen.37.28]
+  people: [joseph_1710]

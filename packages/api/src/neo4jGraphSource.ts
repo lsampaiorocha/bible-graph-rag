@@ -9,6 +9,7 @@ import {
 	MAX_LINEAGE_DEPTH,
 	MAX_LINEAGE_LINKS,
 	type Relation,
+	type VectorHit,
 } from "@kgrag/retrieval";
 import neo4j, { type Driver } from "neo4j-driver";
 
@@ -111,7 +112,7 @@ export class Neo4jGraphSource implements GraphSource {
 			 }
 			 RETURN fromId, r.id AS edgeId, type(r) AS type, startNode(r).id AS source,
 			        endNode(r).id AS target, r.support_count AS supportCount,
-			        n.id AS neighbourId, n.name AS neighbourLabel
+			        n.id AS neighbourId, n.name AS neighbourLabel, coalesce(n.degree, 0) AS neighbourDegree
 			 ORDER BY fromId, supportCount DESC, edgeId`,
 			{ frontierIds, fetchPerNode: neo4j.int(fetchPerNode) },
 		);
@@ -199,6 +200,28 @@ export class Neo4jGraphSource implements GraphSource {
 		return [...byEdge.values()].sort(
 			(a, b) => a.depth - b.depth || (a.edgeId < b.edgeId ? -1 : 1),
 		);
+	}
+
+	async seedsByVector(vector: number[], limit: number): Promise<VectorHit[]> {
+		return this.rows<VectorHit>(
+			`MATCH (e:Entity)
+			   SEARCH e IN (VECTOR INDEX entity_embedding FOR $vector LIMIT $limit) SCORE AS score
+			 RETURN e.id AS nodeId, e.name AS label, score
+			 ORDER BY score DESC, nodeId`,
+			{ vector, limit: neo4j.int(limit) },
+		);
+	}
+
+	async similarities(
+		ids: string[],
+		vector: number[],
+	): Promise<Record<string, number>> {
+		const rows = await this.rows<{ id: string; score: number }>(
+			`MATCH (e:Entity) WHERE e.id IN $ids
+			 RETURN e.id AS id, vector.similarity.cosine(e.embedding, $vector) AS score`,
+			{ ids, vector },
+		);
+		return Object.fromEntries(rows.map((row) => [row.id, row.score]));
 	}
 
 	async entityCards(ids: string[]): Promise<EntityCard[]> {

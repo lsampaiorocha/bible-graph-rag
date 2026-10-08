@@ -14,6 +14,30 @@ export interface ExpansionRow {
 	supportCount: number;
 	neighbourId: string;
 	neighbourLabel: string;
+	neighbourDegree: number;
+}
+
+export interface VectorHit {
+	nodeId: string;
+	label: string;
+	score: number;
+}
+
+export type Embedder = (text: string) => Promise<number[]>;
+
+// Neo4j reports cosine similarity rescaled to 0..1 as (1 + cos) / 2; the in-memory source
+// uses the same scale so both rank and threshold identically.
+export function cosineScore(a: number[], b: number[]): number {
+	let dot = 0;
+	let normA = 0;
+	let normB = 0;
+	a.forEach((value, index) => {
+		const other = b[index] ?? 0;
+		dot += value * other;
+		normA += value * value;
+		normB += other * other;
+	});
+	return normA && normB ? (1 + dot / Math.sqrt(normA * normB)) / 2 : 0;
 }
 
 export interface EntityCard {
@@ -81,6 +105,12 @@ export interface GraphSource {
 	// Direct family links of one kind; siblings also come through a shared parent,
 	// returned as that parent's two links (depth 1 to the person, 2 to the sibling).
 	relatives(personId: string, relation: Relation): Promise<LinkRow[]>;
+	// Nearest entities to a vector, ordered by score descending then nodeId.
+	seedsByVector(vector: number[], limit: number): Promise<VectorHit[]>;
+	similarities(
+		ids: string[],
+		vector: number[],
+	): Promise<Record<string, number>>;
 	entityCards(ids: string[]): Promise<EntityCard[]>;
 	edgeDetails(ids: string[]): Promise<EdgeDetail[]>;
 	verses(refs: string[]): Promise<{ id: string; text: string }[]>;
@@ -96,6 +126,7 @@ export interface MemoryGraph {
 		gender?: string | null;
 		description?: string;
 		firstVerse?: string | null;
+		embedding?: number[];
 	}[];
 	edges: {
 		id: string;
@@ -116,11 +147,24 @@ const PARENT_TYPES = new Set(["FATHER_OF", "MOTHER_OF"]);
 export class MemoryGraphSource implements GraphSource {
 	private readonly graph: MemoryGraph;
 	private readonly entityById: Map<string, MemoryGraph["entities"][number]>;
+	private readonly degreeById: Map<string, number>;
 
 	constructor(graph: MemoryGraph) {
 		this.graph = graph;
 		this.entityById = new Map(
 			graph.entities.map((entity) => [entity.id, entity]),
+		);
+		const neighbours = new Map<string, Set<string>>();
+		for (const edge of graph.edges) {
+			for (const [from, to] of [
+				[edge.source, edge.target],
+				[edge.target, edge.source],
+			] as const) {
+				neighbours.set(from, (neighbours.get(from) ?? new Set()).add(to));
+			}
+		}
+		this.degreeById = new Map(
+			[...neighbours].map(([id, set]) => [id, set.size]),
 		);
 	}
 
@@ -173,6 +217,7 @@ export class MemoryGraphSource implements GraphSource {
 						supportCount: edge.supportCount,
 						neighbourId: neighbour.id,
 						neighbourLabel: neighbour.name,
+						neighbourDegree: this.degreeById.get(neighbour.id) ?? 0,
 					};
 				}),
 		);
@@ -262,6 +307,30 @@ export class MemoryGraphSource implements GraphSource {
 			}
 		}
 		return this.linkRows(depthByEdge);
+	}
+
+	async seedsByVector(vector: number[], limit: number): Promise<VectorHit[]> {
+		return this.graph.entities
+			.filter((entity) => entity.embedding)
+			.map((entity) => ({
+				nodeId: entity.id,
+				label: entity.name,
+				score: cosineScore(entity.embedding ?? [], vector),
+			}))
+			.sort((a, b) => b.score - a.score || compareText(a.nodeId, b.nodeId))
+			.slice(0, limit);
+	}
+
+	async similarities(
+		ids: string[],
+		vector: number[],
+	): Promise<Record<string, number>> {
+		return Object.fromEntries(
+			ids.flatMap((id) => {
+				const embedding = this.entityById.get(id)?.embedding;
+				return embedding ? [[id, cosineScore(embedding, vector)]] : [];
+			}),
+		);
 	}
 
 	async entityCards(ids: string[]): Promise<EntityCard[]> {

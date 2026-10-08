@@ -54,6 +54,7 @@ export async function findSeeds(
 export interface Subgraph {
 	nodes: Map<string, TraceNode>;
 	edges: Map<string, TraceEdge>;
+	degrees?: Map<string, number>;
 }
 
 export async function expandFrom(
@@ -63,6 +64,7 @@ export async function expandFrom(
 ): Promise<Subgraph> {
 	const nodes = new Map<string, TraceNode>();
 	const edges = new Map<string, TraceEdge>();
+	const degrees = new Map<string, number>();
 	for (const { id, label } of seeds) {
 		nodes.set(id, { id, label, hop: 0, score: 1, status: "context" });
 	}
@@ -73,6 +75,7 @@ export async function expandFrom(
 		const nextFrontier: string[] = [];
 		for (const fromRows of Map.groupBy(rows, (row) => row.fromId).values()) {
 			fromRows.forEach((row, rank) => {
+				degrees.set(row.neighbourId, row.neighbourDegree);
 				const kept = rank < params.topM;
 				const status = kept ? "context" : "candidate";
 				const pruned = kept ? {} : { pruned_reason: "neighbour_cap" as const };
@@ -111,7 +114,7 @@ export async function expandFrom(
 		}
 		frontier = nextFrontier;
 	}
-	return { nodes, edges };
+	return { nodes, edges, degrees };
 }
 
 export function orderSubgraph(subgraph: Subgraph): {

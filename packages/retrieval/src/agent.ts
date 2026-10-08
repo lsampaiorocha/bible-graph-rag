@@ -1,6 +1,7 @@
 import { applyAnswer, buildContext, type RawAnswer } from "./context.ts";
 import {
 	compareText,
+	type Embedder,
 	type GraphSource,
 	MAX_LINEAGE_DEPTH,
 	RELATIONS,
@@ -9,9 +10,11 @@ import { findSeeds, type SeedMatch, type Subgraph } from "./modes/local.ts";
 import {
 	executeCall,
 	MAX_TOOL_CALLS,
+	MEANING_MATCH_MIN,
 	planByKeywords,
 	TOOLS,
 	type ToolCall,
+	type ToolContext,
 } from "./tools.ts";
 import type { RetrievalTrace, TraceStep } from "./trace.ts";
 
@@ -143,11 +146,35 @@ export async function runAgent(
 	source: GraphSource,
 	question: string,
 	llm: LlmClient | null,
+	embed?: Embedder,
 ): Promise<RetrievalTrace> {
 	const timings: Record<string, number> = {};
 	const warnings: string[] = [];
 	const usage: LlmUsage[] = [];
+	let questionVector: number[] | null = null;
+	if (embed) {
+		try {
+			questionVector = await embed(question);
+		} catch (error) {
+			warnings.push(
+				`question embedding failed: ${String(error).slice(0, 200)}`,
+			);
+		}
+	}
 	const seeds = await findSeeds(source, question);
+	if (seeds.length === 0 && questionVector) {
+		// A question that names nobody ("Who built the ark?") starts from the entities
+		// nearest to it in meaning.
+		for (const hit of await source.seedsByVector(questionVector, 3)) {
+			if (hit.score >= MEANING_MATCH_MIN) {
+				seeds.push({
+					seed: { node_id: hit.nodeId, method: "embedding", score: hit.score },
+					label: hit.label,
+				});
+			}
+		}
+	}
+	const toolContext: ToolContext = { embed, questionVector };
 	const known = await seedCards(source, seeds);
 
 	const plan = async (
@@ -187,13 +214,29 @@ export async function runAgent(
 		timings[`plan_${round + 1}`] = Math.round(performance.now() - roundStarted);
 		for (const call of calls) {
 			if (steps.length >= MAX_TOOL_CALLS) break;
-			steps.push(await executeCall(source, call, steps.length + 1, subgraph));
+			steps.push(
+				await executeCall(
+					source,
+					call,
+					steps.length + 1,
+					subgraph,
+					toolContext,
+				),
+			);
 		}
 		if (calls.length === 0) break;
 	}
 	if (steps.length === 0) {
 		for (const call of planByKeywords(question, seeds))
-			steps.push(await executeCall(source, call, steps.length + 1, subgraph));
+			steps.push(
+				await executeCall(
+					source,
+					call,
+					steps.length + 1,
+					subgraph,
+					toolContext,
+				),
+			);
 	}
 	timings.retrieve = steps.reduce((sum, step) => sum + step.ms, 0);
 

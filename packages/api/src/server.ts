@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import neo4j from "neo4j-driver";
 import { z } from "zod";
 import { ClaudeCliClient } from "./claudeCli.ts";
+import { embedQuery } from "./embedder.ts";
 import { Neo4jGraphSource } from "./neo4jGraphSource.ts";
 
 const PORT = 8787;
@@ -52,10 +53,15 @@ app.post("/api/query", async (context) => {
 	const { text, mode } = request.data;
 	if (mode === "local") return context.json(await runLocal(source, text));
 	return context.json(
-		await runAgent(source, text, request.data.llm ? llm : null),
+		await runAgent(source, text, request.data.llm ? llm : null, embedQuery),
 	);
 });
 
 serve({ fetch: app.fetch, port: PORT }, () =>
 	console.log(`API listening on http://localhost:${PORT}`),
+);
+
+// Load the embedding model at startup so the first question does not wait for it.
+void embedQuery("warm up").catch((error) =>
+	console.error("embedding model failed to load:", error),
 );

@@ -1,5 +1,6 @@
 import { aliasKey } from "./aliases.ts";
 import {
+	type Embedder,
 	type GraphSource,
 	type LinkRow,
 	MAX_LINEAGE_DEPTH,
@@ -12,6 +13,7 @@ import {
 	type SeedMatch,
 	type Subgraph,
 } from "./modes/local.ts";
+import { rankSubgraph } from "./rank.ts";
 import type { TraceStep } from "./trace.ts";
 
 export const TOOLS = [
@@ -23,6 +25,14 @@ export const TOOLS = [
 ] as const;
 export type ToolName = (typeof TOOLS)[number];
 export const MAX_TOOL_CALLS = 3;
+// On the 0..1 scale of cosineScore. Measured on Genesis: misspelled names and plain
+// questions land at 0.835-0.89, an unrelated phrase at 0.794.
+export const MEANING_MATCH_MIN = 0.82;
+
+export interface ToolContext {
+	embed?: Embedder;
+	questionVector?: number[] | null;
+}
 
 export interface ToolCall {
 	tool: ToolName;
@@ -48,6 +58,7 @@ interface Resolution {
 async function resolveEntity(
 	source: GraphSource,
 	call: ToolCall,
+	context: ToolContext,
 ): Promise<Resolution> {
 	if (ENTITY_ID.test(call.entity)) {
 		const [card] = await source.entityCards([call.entity]);
@@ -59,8 +70,26 @@ async function resolveEntity(
 		(hit) => !PERSON_TOOLS.has(call.tool) || hit.nodeId.startsWith("per_"),
 	);
 	const [best] = hits;
-	if (!best)
+	if (!best) {
+		// No name matched (a misspelling, a description): fall back to the nearest entity
+		// by meaning, if it is close enough to trust.
+		const nearest = context.embed
+			? (await source.seedsByVector(await context.embed(call.entity), 5)).find(
+					(hit) =>
+						!hit.nodeId.startsWith("evt_") &&
+						(!PERSON_TOOLS.has(call.tool) || hit.nodeId.startsWith("per_")),
+				)
+			: undefined;
+		if (nearest && nearest.score >= MEANING_MATCH_MIN) {
+			return {
+				id: nearest.nodeId,
+				label: nearest.label,
+				candidates: [],
+				note: `no entity named "${call.entity}"; matched by meaning to ${nearest.label}`,
+			};
+		}
 		return { candidates: [], note: `no entity named "${call.entity}"` };
+	}
 	// Several people can share a name; take the most mentioned and record the rest so a
 	// second planning round (or the reader) can pick another.
 	const candidates = hits.length > 1 ? hits.map((hit) => hit.nodeId) : [];
@@ -142,12 +171,13 @@ export async function executeCall(
 	call: ToolCall,
 	index: number,
 	into: Subgraph,
+	context: ToolContext = {},
 ): Promise<TraceStep> {
 	const started = performance.now();
 	const args: Record<string, string | number> = { entity: call.entity };
 	if (call.relation) args.relation = call.relation;
 	if (call.generations) args.generations = call.generations;
-	const resolution = await resolveEntity(source, call);
+	const resolution = await resolveEntity(source, call, context);
 	const touched = { nodes: new Set<string>(), edges: new Set<string>() };
 
 	if (resolution.id && resolution.label) {
@@ -171,6 +201,12 @@ export async function executeCall(
 			}
 		} else if (call.tool === "explore") {
 			const local = await expandFrom(source, [root], DEFAULT_LOCAL_PARAMS);
+			await rankSubgraph(
+				source,
+				local,
+				[root.id],
+				context.questionVector ?? null,
+			);
 			for (const [id, node] of local.nodes) {
 				if (
 					!into.nodes.has(id) ||

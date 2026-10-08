@@ -37,12 +37,28 @@ export function AnswerPanel({ trace, labelById, onSelect }: AnswerPanelProps) {
 		return { text: label(id), focus: id, kind: "entity" };
 	};
 	const usage = trace.metrics.usage;
+	const funnel = (items: { status: string }[]) => ({
+		found: items.length,
+		sent: items.filter((item) => item.status !== "candidate").length,
+		cited: items.filter((item) => item.status === "cited").length,
+	});
+	const entities = funnel(trace.nodes);
+	const verses = funnel(trace.chunks);
 	const seconds =
 		Object.values(trace.metrics.timings_ms).reduce((sum, ms) => sum + ms, 0) /
 		1000;
 
 	return (
 		<div className="flex flex-col gap-3 text-sm">
+			<p
+				className="text-xs text-gray-600"
+				title="found by the search → sent to the LLM → cited in the answer"
+			>
+				Entities: {entities.found} found → {entities.sent} sent →{" "}
+				{entities.cited} cited
+				{verses.found > 0 &&
+					` · Verses: ${verses.sent} sent → ${verses.cited} cited`}
+			</p>
 			{trace.steps && trace.steps.length > 0 && (
 				<ol className="flex flex-col gap-0.5 rounded bg-gray-50 p-2 font-mono text-xs text-gray-700">
 					{trace.steps.map((step) => (

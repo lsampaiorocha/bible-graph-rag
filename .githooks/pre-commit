@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+uv run --project pipeline ruff format --check pipeline
+uv run --project pipeline ruff check pipeline
+./node_modules/.bin/biome ci .

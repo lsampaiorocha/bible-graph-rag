@@ -2,13 +2,17 @@ import json
 import os
 import uuid
 from collections import Counter
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import typer
+import yaml
 from dotenv import load_dotenv
 
 from kgrag.build import INDEX_DIR, build_index
+from kgrag.confirm import PURPOSE as CONFIRM_PURPOSE
+from kgrag.confirm import llm_confirmer
 from kgrag.corpus import (
     CORPUS_DIR,
     MAX_PASSAGE_TOKENS,
@@ -45,7 +49,7 @@ from kgrag.llm import (
     summarize_usage,
 )
 from kgrag.neo4j_load import connect, graph_counts, load_graph
-from kgrag.resolve import resolve_naive
+from kgrag.resolve import AliasRules, resolve_naive, resolve_v1
 from kgrag.schema import PassageExtraction
 
 DEFAULT_PROJECT_BUDGET_USD = 40.0
@@ -62,6 +66,19 @@ app.add_typer(corpus_app, name="corpus")
 def main() -> None:
     """Bible Graph RAG batch pipeline."""
     load_dotenv(REPO_ROOT / ".env")
+
+
+def load_alias_rules() -> AliasRules:
+    rules = (
+        yaml.safe_load(
+            (REPO_ROOT / "config" / "aliases.yaml").read_text(encoding="utf-8")
+        )
+        or {}
+    )
+    return AliasRules(
+        must_link=tuple(tuple(pair) for pair in rules.get("must_link") or []),
+        cannot_link=tuple(tuple(pair) for pair in rules.get("cannot_link") or []),
+    )
 
 
 def project_budget_usd() -> float:
@@ -249,8 +266,14 @@ def build_graph(
     scope: str = typer.Option("Gen", help="OSIS book code such as Gen, or Bible."),
     model: str = typer.Option("claude-haiku-5-5"),
     effort: str = typer.Option("medium"),
+    resolver: str = typer.Option(
+        "v1", help="naive (exact names) or v1 (rules plus LLM confirmation)."
+    ),
+    run_budget_usd: float = typer.Option(
+        1.0, help="Cap for the v1 LLM confirmation calls."
+    ),
 ) -> None:
-    """Merge passage extractions into one graph (naive name matching) with layout and clusters."""
+    """Merge passage extractions into one graph, with layout and clusters."""
     passage_ids = [
         passage["id"]
         for passage in read_jsonl(CORPUS_DIR / "passages.jsonl")
@@ -266,10 +289,42 @@ def build_graph(
         verse["osis_ref"]: index
         for index, verse in enumerate(read_jsonl(CORPUS_DIR / "verses.jsonl"))
     }
-    entities, edges = build_index(extractions, resolve_naive(extractions), verse_order)
-
-    index_id = f"{scope.lower()}-naive"
+    index_id = f"{scope.lower()}-{resolver}"
     out_dir = INDEX_DIR / index_id
+    if resolver == "naive":
+        resolution = resolve_naive(extractions)
+    elif resolver == "v1":
+        ledger = Ledger()
+        budget = Budget(run_budget_usd, project_budget_usd(), 0.10, ledger.total_cost())
+        client = ClaudeCodeClient(
+            ModelConfig(model=model, effort=effort),
+            budget=budget,
+            ledger=ledger,
+            run_id=f"er-{datetime.now(UTC):%Y%m%dT%H%M%S}",
+            purpose=CONFIRM_PURPOSE,
+        )
+        verse_text = {
+            verse["osis_ref"]: verse["text"]
+            for verse in read_jsonl(CORPUS_DIR / "verses.jsonl")
+        }
+        resolution, decisions = resolve_v1(
+            extractions,
+            verse_order,
+            llm_confirmer(client, verse_text),
+            load_alias_rules(),
+        )
+        write_jsonl(
+            out_dir / "er_audit.jsonl", (asdict(decision) for decision in decisions)
+        )
+        rules = Counter((decision.verdict, decision.rule) for decision in decisions)
+        typer.echo("resolution decisions:")
+        for (verdict, rule), count in rules.most_common():
+            typer.echo(f"  {verdict:<7} {count:>5}  {rule}")
+        typer.echo(f"confirmation spend: ${budget.spent_this_run_usd:.4f}")
+    else:
+        raise typer.BadParameter(f"unknown resolver {resolver!r}; use naive or v1")
+    entities, edges = build_index(extractions, resolution, verse_order)
+
     write_jsonl(out_dir / "entities.jsonl", entities)
     write_jsonl(out_dir / "edges.jsonl", edges)
     (out_dir / "meta.json").write_text(
@@ -277,7 +332,7 @@ def build_graph(
             {
                 "index_id": index_id,
                 "scope": scope,
-                "resolver": "naive",
+                "resolver": resolver,
                 "extraction_model": model,
                 "extraction_effort": effort,
                 "passages": len(extractions),

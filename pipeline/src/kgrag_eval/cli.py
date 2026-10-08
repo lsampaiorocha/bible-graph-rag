@@ -6,15 +6,17 @@ from pathlib import Path
 
 import typer
 
+from kgrag.build import INDEX_DIR
 from kgrag.corpus import CORPUS_DIR, REPO_ROOT, read_jsonl, read_passage_ids
 from kgrag.extract import extraction_dir
 from kgrag.llm import ModelConfig
 from kgrag_eval.bakeoff import ConfigScore, load_extraction, score_passage
+from kgrag_eval.entities import EntityScore, score_entities
 from kgrag_eval.theographic import (
     ALL_BOOKS,
     compute_gold_stats,
+    load_gold,
     load_records,
-    parse_md_mentions,
 )
 
 COMBINED_TOLERANCE = 0.03
@@ -116,20 +118,7 @@ def bakeoff(
     passages = {
         passage["id"]: passage for passage in read_jsonl(CORPUS_DIR / "passages.jsonl")
     }
-    people = load_records("people.json")
-    places = load_records("places.json")
-    people_by_slug = {fields["slug"]: fields for fields in people.values()}
-    places_by_slug = {fields["slug"]: fields for fields in places.values()}
-    slug_by_id = {record_id: fields["slug"] for record_id, fields in people.items()}
-    known_slugs = {"person": people_by_slug, "place": places_by_slug}
-    gold_spans = {}
-    dangling_links = 0
-    for fields in load_records("verses.json").values():
-        spans = parse_md_mentions(fields.get("mdText", ""))
-        gold_spans[fields["osisRef"]] = [
-            span for span in spans if span.slug in known_slugs[span.kind]
-        ]
-        dangling_links += len(spans) - len(gold_spans[fields["osisRef"]])
+    gold = load_gold()
 
     rows = []
     for config_text in configs:
@@ -144,10 +133,10 @@ def bakeoff(
                     score,
                     extraction,
                     passages[passage_id]["text"],
-                    gold_spans,
-                    people_by_slug,
-                    places_by_slug,
-                    slug_by_id,
+                    gold.spans,
+                    gold.people_by_slug,
+                    gold.places_by_slug,
+                    gold.person_slug_by_id,
                 )
         rows.append(score_row(config_text, score))
 
@@ -165,7 +154,9 @@ def bakeoff(
     else:
         recommendation = "no config has extractions for every passage yet."
 
-    markdown = render_markdown(rows, recommendation, len(passage_ids), dangling_links)
+    markdown = render_markdown(
+        rows, recommendation, len(passage_ids), gold.dangling_links
+    )
     out_dir = (
         REPO_ROOT
         / "eval"
@@ -176,5 +167,138 @@ def bakeoff(
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "results.md").write_text(markdown, encoding="utf-8")
     (out_dir / "results.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
+    typer.echo(markdown)
+    typer.echo(f"written to {out_dir}")
+
+
+def entity_summary(index_id: str, score: EntityScore) -> dict:
+    return {
+        "index": index_id,
+        "aligned_mentions": score.mentions,
+        "bcubed_precision": score.bcubed_precision,
+        "bcubed_recall": score.bcubed_recall,
+        "bcubed_f1": score.bcubed_f1(),
+        "merge_errors": len(score.merge_errors),
+        "split_errors": len(score.split_errors),
+        "person_mention_f1": score.mention_f1["person"].f1(),
+        "place_mention_f1": score.mention_f1["place"].f1(),
+        "gender_accuracy": score.gender.value(),
+        "place_kind_accuracy": score.place_kind.value(),
+        "hard_cases_passed": sum(passed for _, passed, _ in score.hard_cases),
+        "hard_cases": [
+            {"case": case, "passed": passed, "detail": detail}
+            for case, passed, detail in score.hard_cases
+        ],
+        "merge_error_examples": [
+            {"entity": e.key, "gold": dict(e.parts)} for e in score.merge_errors[:10]
+        ],
+        "split_error_examples": [
+            {"gold": e.key, "entities": dict(e.parts)} for e in score.split_errors[:10]
+        ],
+    }
+
+
+def render_entity_markdown(
+    summaries: list[dict], scope: str, dangling_links: int
+) -> str:
+    def pct(value: float) -> str:
+        return f"{value * 100:.1f}"
+
+    metrics = [
+        ("B³ precision", "bcubed_precision", pct),
+        ("B³ recall", "bcubed_recall", pct),
+        ("B³ F1", "bcubed_f1", pct),
+        ("Merge errors (one entity, several real people)", "merge_errors", str),
+        ("Split errors (one real person, several entities)", "split_errors", str),
+        ("Person mention F1", "person_mention_f1", pct),
+        ("Place mention F1", "place_mention_f1", pct),
+        ("Gender accuracy", "gender_accuracy", pct),
+        ("Place kind accuracy", "place_kind_accuracy", pct),
+        ("Hard cases passed (of 6)", "hard_cases_passed", str),
+        ("Aligned mentions", "aligned_mentions", str),
+    ]
+    lines = [
+        f"# Entity resolution scoreboard ({scope})",
+        "",
+        "B³ scores each name mention by how cleanly its entity matches the real person or place the",
+        "answer key says it is. Precision falls when people are merged; recall falls when one person is",
+        f"split. {dangling_links} answer-key links point to ids that do not exist and are ignored.",
+        "",
+        "| Metric | " + " | ".join(summary["index"] for summary in summaries) + " |",
+        "|---|" + "---|" * len(summaries),
+    ]
+    for label, key, fmt in metrics:
+        lines.append(
+            f"| {label} | "
+            + " | ".join(fmt(summary[key]) for summary in summaries)
+            + " |"
+        )
+    for summary in summaries:
+        lines += [
+            "",
+            f"## {summary['index']}: hard cases",
+            "",
+            "| Case | Passed | Entities |",
+            "|---|---|---|",
+        ]
+        lines += [
+            f"| {c['case']} | {'yes' if c['passed'] else 'no'} | {c['detail']} |"
+            for c in summary["hard_cases"]
+        ]
+        lines += [
+            "",
+            "Largest merge errors: "
+            + "; ".join(
+                f"{e['entity']} = "
+                + ", ".join(f"{g} {n}" for g, n in e["gold"].items())
+                for e in summary["merge_error_examples"][:5]
+            ),
+        ]
+        lines += [
+            "",
+            "Largest split errors: "
+            + "; ".join(
+                f"{e['gold']} = "
+                + ", ".join(f"{g} {n}" for g, n in e["entities"].items())
+                for e in summary["split_error_examples"][:5]
+            ),
+        ]
+    return "\n".join(lines) + "\n"
+
+
+@app.command()
+def er(
+    index_ids: list[str] = typer.Option(
+        ..., "--index", help="Index id such as gen-naive; repeat to compare."
+    ),
+) -> None:
+    """Score entity resolution of one or more graph indexes against the answer key."""
+    gold = load_gold()
+    summaries = []
+    scopes = set()
+    for index_id in index_ids:
+        meta = json.loads(
+            (INDEX_DIR / index_id / "meta.json").read_text(encoding="utf-8")
+        )
+        scopes.add(meta["scope"])
+        entities = list(read_jsonl(INDEX_DIR / index_id / "entities.jsonl"))
+        score = score_entities(
+            entities,
+            gold.spans,
+            gold.tags(meta["scope"]),
+            gold.people_by_slug,
+            gold.places_by_slug,
+        )
+        summaries.append(entity_summary(index_id, score))
+    scope = ", ".join(sorted(scopes))
+    markdown = render_entity_markdown(summaries, scope, gold.dangling_links)
+    out_dir = (
+        REPO_ROOT / "eval" / "results" / "er" / f"{datetime.now(UTC):%Y%m%dT%H%M%S}"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "results.md").write_text(markdown, encoding="utf-8")
+    (out_dir / "results.json").write_text(
+        json.dumps(summaries, indent=1), encoding="utf-8"
+    )
     typer.echo(markdown)
     typer.echo(f"written to {out_dir}")

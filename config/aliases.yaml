@@ -1,0 +1,5 @@
+# Manual overrides for entity resolution, applied before every automatic rule.
+# Each entry pairs two mentions written as "<name>@<verse>", using the lowercase name
+# as it appears in that verse, for example: ["lamech@Gen.4.18", "lamech@Gen.5.25"].
+must_link: []
+cannot_link: []

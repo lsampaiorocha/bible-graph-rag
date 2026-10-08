@@ -1,0 +1,208 @@
+[
+ {
+  "index": "gen-naive",
+  "aligned_mentions": 2305,
+  "bcubed_precision": 0.9594415292816937,
+  "bcubed_recall": 0.9478948424204485,
+  "bcubed_f1": 0.9536332350213564,
+  "merge_errors": 7,
+  "split_errors": 3,
+  "person_mention_f1": 0.9412329095706405,
+  "place_mention_f1": 0.748993288590604,
+  "gender_accuracy": 0.9523809523809523,
+  "place_kind_accuracy": 0.7580645161290323,
+  "hard_cases_passed": 2,
+  "hard_cases": [
+   {
+    "case": "keep lamech_1808 and lamech_1809 apart",
+    "passed": false,
+    "detail": "per_lamech / per_lamech"
+   },
+   {
+    "case": "keep enoch_1191 and enoch_1192 apart",
+    "passed": false,
+    "detail": "per_enoch / per_enoch"
+   },
+   {
+    "case": "keep nahor_2142 and nahor_2143 apart",
+    "passed": true,
+    "detail": "per_nahor_son_of_serug / per_nahor"
+   },
+   {
+    "case": "merge all names of abraham_58",
+    "passed": false,
+    "detail": "per_abraham 119, per_abram 45"
+   },
+   {
+    "case": "merge all names of sarah_2473",
+    "passed": false,
+    "detail": "per_sarah 31, per_sarai 12"
+   },
+   {
+    "case": "merge all names of israel_682",
+    "passed": true,
+    "detail": "per_jacob 170, per_israel 8"
+   }
+  ],
+  "merge_error_examples": [
+   {
+    "entity": "per_adah",
+    "gold": {
+     "adah_414": 5,
+     "adah_69": 3
+    }
+   },
+   {
+    "entity": "per_lamech",
+    "gold": {
+     "lamech_1808": 4,
+     "lamech_1809": 4
+    }
+   },
+   {
+    "entity": "per_anah",
+    "gold": {
+     "anah_247": 3,
+     "anah_248": 3,
+     "anah_249": 1
+    }
+   },
+   {
+    "entity": "per_enoch",
+    "gold": {
+     "enoch_1192": 5,
+     "enoch_1191": 2
+    }
+   },
+   {
+    "entity": "pla_zoar",
+    "gold": {
+     "zoar_1271": 4,
+     "bela_172": 2
+    }
+   },
+   {
+    "entity": "per_zibeon",
+    "gold": {
+     "zibeon_3062": 3,
+     "zibeon_3061": 2
+    }
+   },
+   {
+    "entity": "pla_bethlehem",
+    "gold": {
+     "ephrath_403": 3,
+     "bethlehem_218": 2
+    }
+   }
+  ],
+  "split_error_examples": [
+   {
+    "gold": "abraham_58",
+    "entities": {
+     "per_abraham": 119,
+     "per_abram": 45
+    }
+   },
+   {
+    "gold": "sarah_2473",
+    "entities": {
+     "per_sarah": 31,
+     "per_sarai": 12
+    }
+   },
+   {
+    "gold": "nahor_2143",
+    "entities": {
+     "per_nahor": 7,
+     "per_nahor_son_of_terah": 3
+    }
+   }
+  ]
+ },
+ {
+  "index": "gen-v1",
+  "aligned_mentions": 2305,
+  "bcubed_precision": 0.9704678131930101,
+  "bcubed_recall": 0.9931629413059198,
+  "bcubed_f1": 0.9816842250868496,
+  "merge_errors": 5,
+  "split_errors": 0,
+  "person_mention_f1": 0.9527464619812904,
+  "place_mention_f1": 0.7463087248322148,
+  "gender_accuracy": 0.9516616314199395,
+  "place_kind_accuracy": 0.7719298245614035,
+  "hard_cases_passed": 6,
+  "hard_cases": [
+   {
+    "case": "keep lamech_1808 and lamech_1809 apart",
+    "passed": true,
+    "detail": "per_lamech_gen_4_18 / per_lamech_gen_5_25"
+   },
+   {
+    "case": "keep enoch_1191 and enoch_1192 apart",
+    "passed": true,
+    "detail": "per_enoch_gen_4_17 / per_enoch_gen_5_18"
+   },
+   {
+    "case": "keep nahor_2142 and nahor_2143 apart",
+    "passed": true,
+    "detail": "per_nahor_son_of_serug / per_nahor"
+   },
+   {
+    "case": "merge all names of abraham_58",
+    "passed": true,
+    "detail": "per_abraham 164"
+   },
+   {
+    "case": "merge all names of sarah_2473",
+    "passed": true,
+    "detail": "per_sarah 43"
+   },
+   {
+    "case": "merge all names of israel_682",
+    "passed": true,
+    "detail": "per_jacob 178"
+   }
+  ],
+  "merge_error_examples": [
+   {
+    "entity": "pla_bethel",
+    "gold": {
+     "bethel_202": 9,
+     "luz_737": 3
+    }
+   },
+   {
+    "entity": "pla_hebron",
+    "gold": {
+     "hebron_551": 4,
+     "kiriath-arba_697": 2,
+     "vale_of_hebron_1206": 1
+    }
+   },
+   {
+    "entity": "pla_zoar",
+    "gold": {
+     "zoar_1271": 4,
+     "bela_172": 2
+    }
+   },
+   {
+    "entity": "per_zibeon",
+    "gold": {
+     "zibeon_3062": 3,
+     "zibeon_3061": 2
+    }
+   },
+   {
+    "entity": "pla_bethlehem",
+    "gold": {
+     "ephrath_403": 3,
+     "bethlehem_218": 2
+    }
+   }
+  ],
+  "split_error_examples": []
+ }
+]

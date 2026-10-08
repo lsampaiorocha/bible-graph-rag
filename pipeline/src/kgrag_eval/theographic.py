@@ -86,3 +86,57 @@ def compute_gold_stats(
         sibling_pairs=pairs_within_scope("siblings"),
         shared_name_groups=sum(1 for count in name_counts.values() if count > 1),
     )
+
+
+@dataclass(frozen=True)
+class Gold:
+    verses: dict[str, dict]
+    people_by_slug: dict[str, dict]
+    places_by_slug: dict[str, dict]
+    person_slug_by_id: dict[str, str]
+    place_slug_by_id: dict[str, str]
+    spans: dict[str, list[GoldMention]]
+    dangling_links: int
+
+    def tags(self, scope: str) -> dict[str, set[tuple[str, str]]]:
+        tags: dict[str, set[tuple[str, str]]] = {"person": set(), "place": set()}
+        for verse in self.verses.values():
+            if not in_scope(verse["osisRef"], scope):
+                continue
+            for record_id in verse.get("people", []):
+                tags["person"].add(
+                    (verse["osisRef"], self.person_slug_by_id[record_id])
+                )
+            for record_id in verse.get("places", []):
+                tags["place"].add((verse["osisRef"], self.place_slug_by_id[record_id]))
+        return tags
+
+
+def load_gold() -> Gold:
+    verses = load_records("verses.json")
+    people = load_records("people.json")
+    places = load_records("places.json")
+    people_by_slug = {fields["slug"]: fields for fields in people.values()}
+    places_by_slug = {fields["slug"]: fields for fields in places.values()}
+    known_slugs = {"person": people_by_slug, "place": places_by_slug}
+    spans = {}
+    dangling_links = 0
+    for fields in verses.values():
+        verse_spans = parse_md_mentions(fields.get("mdText", ""))
+        spans[fields["osisRef"]] = [
+            span for span in verse_spans if span.slug in known_slugs[span.kind]
+        ]
+        dangling_links += len(verse_spans) - len(spans[fields["osisRef"]])
+    return Gold(
+        verses=verses,
+        people_by_slug=people_by_slug,
+        places_by_slug=places_by_slug,
+        person_slug_by_id={
+            record_id: fields["slug"] for record_id, fields in people.items()
+        },
+        place_slug_by_id={
+            record_id: fields["slug"] for record_id, fields in places.items()
+        },
+        spans=spans,
+        dangling_links=dangling_links,
+    )

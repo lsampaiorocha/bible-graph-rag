@@ -71,18 +71,18 @@ Each milestone ends with something you can see. Hours are focused work, and each
 | M3 | **Vertical slice** | Type "Noah" at localhost:5173 and watch his 2-hop neighbourhood light up, with the trace JSON alongside | 12–16 |
 | M4 | Entity resolution v1 and scoreboard | Run the ER scoreboard for before vs after. The two Lamechs are split; Abram = Abraham and Jacob = Israel are merged. | 14–20 |
 | M5 | Benchmark harness and regression test | Open `#/eval` and see P/R/F1 per category. CI fails if a metric silently moves. | 11–15 |
-| M6 | Local mode complete | Get cited answers. Clicking [C2] highlights the verses and the subgraph. | 11–15 |
-| M7 | Path mode | Ask "How is Lot connected to Abraham?" and see the chain highlighted and cited | 5–8 |
+| M6 | Query agent and cited answers | A small agent turns each question into tool calls (find_entity, explore, ancestors/descendants, relatives). "Ancestors of Noah" returns the line through Seth as a top-down tree, with a cited answer. | 20–28 |
+| M7 | Path tool | The agent's `path(a, b)` tool: ask "How is Lot connected to Abraham?" and see the chain highlighted and cited | 5–8 |
 | M8 | Baselines and QA evaluation | See Graph vs Vector vs Closed-book on 25 Genesis questions | 11–15 |
 | M9 | Full Bible | See the whole-Bible graph, plus Genesis (tuned) vs Bible (held-out) scores | 9–14 |
 | M10 | In-browser search and parity test | Stop the API, type a question in the static build, and still see the graph light up | 10–15 |
 | M11 | **Ship: GitHub Pages and BYOK** | Share a public URL with 25 replayable queries. Requires your go-ahead to push. | 6–9 |
-| M12 | Replay and Compare views | Step through seeds → hops → dropped → context → cited; split view of vector vs graph | 10–16 |
+| M12 | Replay and Compare views | Step through the agent's tool calls, then seeds → hops → dropped → context → cited; split view of vector vs graph | 10–16 |
 | M13 | LightRAG benchmark | See a LightRAG column in the QA table | 5–8 |
 | M14 | README, GIF, design notes | Send a polished repo link with the results table first | 5–8 |
 
-**Total:** 127–186 h of focused work, or about **145–220 h** including time spent re-orienting.
-- The public demo ships after M11, at about 107–154 h.
+**Total:** 136–199 h of focused work, or about **155–235 h** including time spent re-orienting. (Revised 2026-10-08: M6 grew from 11–15 h to 20–28 h for the query agent.)
+- The public demo ships after M11, at about 116–167 h.
 - At 10 h a week that is about 13–19 weeks; at 20 h a week, about 7–10 weeks.
 
 **LLM spend:** budget **$15–40 in total**.
@@ -144,14 +144,19 @@ Each milestone ends with something you can see. Hours are focused work, and each
 - Golden regression test: commit the Genesis extractions and assert the whole `results.json`.
 - UI `#/eval` page.
 
-**M6 Local mode (11–15 h)**
+**M6 Query agent and cited answers (20–28 h; changed 2026-10-08, decision D10)**
+- A small agent (at most 3 tool calls per question) picks from a fixed menu of tested graph-query tools; the Cypher behind each tool is ours, the LLM only chooses tools and fills in entities.
+- Tools: `find_entity(name)` (picks among people who share a name), `explore(entity)` (the neighbourhood search below, i.e. Graph RAG), `ancestors(person, generations)` and `descendants(person, generations)`, `relatives(person, type)`. `path(a, b)` arrives in M7.
+- Every tool call is recorded in the trace as a step, so the UI can replay it. A family-line result switches the graph to a top-down tree.
+- Without an LLM key (the public site), a keyword fallback maps words like "ancestors" and "sons of" to the same tools.
+- Open: agent runtime. Anthropic Messages API tool use with a key; locally, possibly the Agent SDK on the subscription.
 - Seed linking: alias n-grams, choosing among same-name entities by embedding, with vector fallback.
 - `ppr.ts`: Personalized PageRank (α 0.85, degree damping β 0.5, nodes in id order).
 - Passage scoring and a context builder with E/R/C handles and a token budget.
 - Structured cited answer, citation validation, and the promotion rules (02 §4.3).
 - UI: clickable citations and funnel counts.
 
-**M7 Path mode (5–8 h)**
+**M7 Path tool (5–8 h)**
 - Cypher fetches a 2-hop corridor around X and Y.
 - `paths.ts` runs Yen's k-shortest paths (k=3, at most 4 hops), with cost = support term + hub penalty.
 - The path is narrated with citations.

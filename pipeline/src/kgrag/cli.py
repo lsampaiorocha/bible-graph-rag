@@ -1,17 +1,55 @@
 import json
+import os
+import uuid
+from collections import Counter
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
 
+from kgrag.build import INDEX_DIR, build_index
 from kgrag.corpus import (
     CORPUS_DIR,
     MAX_PASSAGE_TOKENS,
+    REPO_ROOT,
     build_verses,
     fetch_theographic_file,
     pack_passages,
     read_jsonl,
+    read_passage_ids,
     tiktoken_counter,
     write_jsonl,
 )
+from kgrag.embed import (
+    embed_texts,
+    entity_profile,
+    load_embeddings,
+    passage_body,
+    save_embeddings,
+)
+from kgrag.extract import (
+    PURPOSE,
+    extract_passages,
+    extraction_dir,
+    load_extractions,
+    load_system_prompt,
+    user_prompt,
+)
+from kgrag.llm import (
+    Budget,
+    BudgetExceeded,
+    ClaudeCodeClient,
+    Ledger,
+    ModelConfig,
+    summarize_usage,
+)
+from kgrag.neo4j_load import connect, graph_counts, load_graph
+from kgrag.resolve import resolve_naive
+from kgrag.schema import PassageExtraction
+
+DEFAULT_PROJECT_BUDGET_USD = 40.0
+CONFIRM_ABOVE_USD = 1.0
 
 app = typer.Typer(no_args_is_help=True)
 corpus_app = typer.Typer(
@@ -23,6 +61,11 @@ app.add_typer(corpus_app, name="corpus")
 @app.callback()
 def main() -> None:
     """Bible Graph RAG batch pipeline."""
+    load_dotenv(REPO_ROOT / ".env")
+
+
+def project_budget_usd() -> float:
+    return float(os.environ.get("KGRAG_PROJECT_BUDGET_USD", DEFAULT_PROJECT_BUDGET_USD))
 
 
 @corpus_app.command()
@@ -60,3 +103,252 @@ def show(passage_id: str) -> None:
             typer.echo(passage["text"])
             return
     raise typer.BadParameter(f"no passage with id {passage_id!r}")
+
+
+def select_passages(passages_file: Path | None, scope: str | None) -> list[dict]:
+    passages = list(read_jsonl(CORPUS_DIR / "passages.jsonl"))
+    if passages_file is not None:
+        wanted = read_passage_ids(passages_file)
+        by_id = {passage["id"]: passage for passage in passages}
+        missing = [passage_id for passage_id in wanted if passage_id not in by_id]
+        if missing:
+            raise typer.BadParameter(f"unknown passage ids: {', '.join(missing)}")
+        return [by_id[passage_id] for passage_id in wanted]
+    if scope is not None:
+        return [passage for passage in passages if scope in ("Bible", passage["book"])]
+    raise typer.BadParameter("pass --passages FILE or --scope BOOK")
+
+
+@app.command()
+def extract(
+    passages_file: Path | None = typer.Option(
+        None, "--passages", help="File with one passage id per line."
+    ),
+    scope: str | None = typer.Option(
+        None, help="OSIS book code such as Gen, or Bible."
+    ),
+    model: str = typer.Option(
+        "claude-haiku-5-5", help="Full model id; aliases drift over time."
+    ),
+    effort: str = typer.Option("medium", help="low, medium, high, xhigh or max."),
+    run_budget_usd: float = typer.Option(
+        2.0, help="Stop this run once it has spent this much."
+    ),
+    call_budget_usd: float = typer.Option(
+        0.10, help="Cap for a single claude -p call."
+    ),
+    workers: int = typer.Option(4, help="Parallel claude -p calls."),
+    dry_run: bool = typer.Option(
+        False, help="Show what would run and the projected cost, then stop."
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", help=f"Skip the confirmation above ${CONFIRM_ABOVE_USD:.2f}."
+    ),
+) -> None:
+    passages = select_passages(passages_file, scope)
+    config = ModelConfig(model=model, effort=effort)
+    ledger = Ledger()
+    system_prompt = load_system_prompt()
+    probe = ClaudeCodeClient(
+        config, budget=None, ledger=ledger, run_id="", purpose=PURPOSE
+    )
+    to_call = [
+        passage
+        for passage in passages
+        if not probe.is_cached(system_prompt, user_prompt(passage), PassageExtraction)
+    ]
+    average_cost = ledger.average_call_cost(config, PURPOSE)
+    projected = None if average_cost is None else average_cost * len(to_call)
+    spent_total = ledger.total_cost()
+
+    typer.echo(f"model:      {model} (effort {effort})")
+    typer.echo(
+        f"passages:   {len(passages)} selected, {len(passages) - len(to_call)} cached, {len(to_call)} to call"
+    )
+    typer.echo(
+        "projected:  "
+        + (
+            f"${projected:.4f}"
+            if projected is not None
+            else "unknown, no history for this model/effort yet"
+        )
+    )
+    typer.echo(f"run cap:    ${run_budget_usd:.2f} (per call ${call_budget_usd:.2f})")
+    typer.echo(f"project:    ${spent_total:.4f} spent of ${project_budget_usd():.2f}")
+    if dry_run:
+        return
+
+    worst_case = projected if projected is not None else run_budget_usd
+    if to_call and worst_case > CONFIRM_ABOVE_USD and not yes:
+        typer.confirm(
+            f"This run may spend up to ${min(worst_case, run_budget_usd):.2f}. Continue?",
+            abort=True,
+        )
+
+    try:
+        budget = (
+            Budget(run_budget_usd, project_budget_usd(), call_budget_usd, spent_total)
+            if to_call
+            else None
+        )
+    except BudgetExceeded as error:
+        raise typer.Exit(f"stopped: {error}") from error
+    run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:6]}"
+    client = ClaudeCodeClient(
+        config, budget=budget, ledger=ledger, run_id=run_id, purpose=PURPOSE
+    )
+    summary = extract_passages(client, passages, extraction_dir(config), workers)
+
+    typer.echo(f"extracted:  {summary.extracted} new, {summary.from_cache} from cache")
+    if summary.failed:
+        typer.echo(f"failed:     {len(summary.failed)}")
+        for failure in summary.failed:
+            typer.echo(f"  - {failure}")
+    if summary.stopped_by_budget:
+        typer.echo(
+            f"stopped:    {summary.stopped_by_budget}; {summary.not_attempted} passages left, rerun to continue"
+        )
+    spent_run = budget.spent_this_run_usd if budget else 0.0
+    typer.echo(
+        f"spent:      ${spent_run:.4f} this run, ${spent_total + spent_run:.4f} of ${project_budget_usd():.2f} in total"
+    )
+    typer.echo(f"output:     {extraction_dir(config)}")
+
+
+@app.command()
+def usage() -> None:
+    """Show LLM spending from the ledger, in API-equivalent USD."""
+    rows = Ledger().rows()
+    now = datetime.now(UTC)
+    for title, since in [
+        ("today", now.replace(hour=0, minute=0, second=0)),
+        ("last 7 days", now - timedelta(days=7)),
+        ("all time", None),
+    ]:
+        totals = summarize_usage(rows, since)
+        typer.echo(f"\n{title}")
+        if not totals:
+            typer.echo("  no calls")
+            continue
+        typer.echo(
+            f"  {'model':<26} {'effort':<7} {'purpose':<9} {'calls':>6} {'in tok':>10} {'out tok':>9} {'think':>8} {'USD':>9}"
+        )
+        for (model, effort, purpose), group in sorted(totals.items()):
+            typer.echo(
+                f"  {model:<26} {effort:<7} {purpose:<9} {group['calls']:>6,} {group['input_tokens']:>10,} "
+                f"{group['output_tokens']:>9,} {group['thinking_tokens']:>8,} {group['cost_usd']:>9.4f}"
+            )
+    spent = sum(row["cost_usd"] for row in rows)
+    typer.echo(
+        f"\nproject budget: ${spent:.4f} spent of ${project_budget_usd():.2f} (${project_budget_usd() - spent:.4f} left)"
+    )
+
+
+@app.command("build")
+def build_graph(
+    scope: str = typer.Option("Gen", help="OSIS book code such as Gen, or Bible."),
+    model: str = typer.Option("claude-haiku-5-5"),
+    effort: str = typer.Option("medium"),
+) -> None:
+    """Merge passage extractions into one graph (naive name matching) with layout and clusters."""
+    passage_ids = [
+        passage["id"]
+        for passage in read_jsonl(CORPUS_DIR / "passages.jsonl")
+        if scope in ("Bible", passage["book"])
+    ]
+    config = ModelConfig(model=model, effort=effort)
+    extractions, missing = load_extractions(config, passage_ids)
+    if missing:
+        raise typer.BadParameter(
+            f"{len(missing)} passages not extracted yet, e.g. {missing[0]}; run kgrag extract first"
+        )
+    verse_order = {
+        verse["osis_ref"]: index
+        for index, verse in enumerate(read_jsonl(CORPUS_DIR / "verses.jsonl"))
+    }
+    entities, edges = build_index(extractions, resolve_naive(extractions), verse_order)
+
+    index_id = f"{scope.lower()}-naive"
+    out_dir = INDEX_DIR / index_id
+    write_jsonl(out_dir / "entities.jsonl", entities)
+    write_jsonl(out_dir / "edges.jsonl", edges)
+    (out_dir / "meta.json").write_text(
+        json.dumps(
+            {
+                "index_id": index_id,
+                "scope": scope,
+                "resolver": "naive",
+                "extraction_model": model,
+                "extraction_effort": effort,
+                "passages": len(extractions),
+                "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
+    kinds = Counter(entity["kind"] for entity in entities)
+    types = Counter(edge["type"] for edge in edges)
+    typer.echo(
+        f"entities:    {len(entities):,} ({', '.join(f'{kind} {count}' for kind, count in kinds.most_common())})"
+    )
+    typer.echo(f"edges:       {len(edges):,}")
+    for edge_type, count in types.most_common():
+        typer.echo(f"  {edge_type:<16} {count:>5}")
+    typer.echo(f"communities: {len({entity['community'] for entity in entities})}")
+    typer.echo(f"output:      {out_dir}")
+
+
+def index_scope(index_id: str) -> tuple[dict, list[dict]]:
+    meta = json.loads((INDEX_DIR / index_id / "meta.json").read_text(encoding="utf-8"))
+    passages = [
+        passage
+        for passage in read_jsonl(CORPUS_DIR / "passages.jsonl")
+        if meta["scope"] in ("Bible", passage["book"])
+    ]
+    return meta, passages
+
+
+@app.command()
+def embed(index_id: str = typer.Option("gen-naive", "--index")) -> None:
+    """Embed entity profiles and passages with the model the browser will also run."""
+    _, passages = index_scope(index_id)
+    entities = list(read_jsonl(INDEX_DIR / index_id / "entities.jsonl"))
+    save_embeddings(
+        INDEX_DIR / index_id / "entity_embeddings.npz",
+        [entity["id"] for entity in entities],
+        embed_texts([entity_profile(entity) for entity in entities]),
+    )
+    save_embeddings(
+        INDEX_DIR / index_id / "passage_embeddings.npz",
+        [passage["id"] for passage in passages],
+        embed_texts([passage_body(passage["text"]) for passage in passages]),
+    )
+    typer.echo(f"embedded {len(entities):,} entities and {len(passages):,} passages")
+
+
+@app.command("neo4j-load")
+def neo4j_load(index_id: str = typer.Option("gen-naive", "--index")) -> None:
+    """Wipe the local Neo4j database and load one index into it."""
+    meta, passages = index_scope(index_id)
+    verse_refs = {
+        verse_ref for passage in passages for verse_ref in passage["verse_refs"]
+    }
+    verses = [
+        verse
+        for verse in read_jsonl(CORPUS_DIR / "verses.jsonl")
+        if verse["osis_ref"] in verse_refs
+    ]
+    with connect() as driver:
+        load_graph(
+            driver,
+            meta,
+            verses,
+            passages,
+            list(read_jsonl(INDEX_DIR / index_id / "entities.jsonl")),
+            list(read_jsonl(INDEX_DIR / index_id / "edges.jsonl")),
+            load_embeddings(INDEX_DIR / index_id / "entity_embeddings.npz"),
+            load_embeddings(INDEX_DIR / index_id / "passage_embeddings.npz"),
+        )
+        for name, count in graph_counts(driver).items():
+            typer.echo(f"{name:<22} {count:>8,}")

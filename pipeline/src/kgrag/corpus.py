@@ -121,3 +121,11 @@ def read_jsonl(path: Path) -> Iterator[dict]:
     with path.open(encoding="utf-8") as file:
         for line in file:
             yield json.loads(line)
+
+
+def read_passage_ids(path: Path) -> list[str]:
+    lines = (
+        line.split("#")[0].strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+    )
+    return [line for line in lines if line]

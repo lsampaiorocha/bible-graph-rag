@@ -1,0 +1,24 @@
+# 20 Genesis passages for the extraction model bake-off.
+# Chosen for renames (Abram/Abraham, Sarai/Sarah, Jacob/Israel, Luz/Bethel),
+# names shared by different people (Lamech, Enoch, Nahor, Anah, Zerah),
+# dense genealogies and the "the LORD" / "Pharaoh" title conventions.
+Gen.4.p1
+Gen.4.p2
+Gen.5.p1
+Gen.5.p2
+Gen.11.p1
+Gen.11.p2
+Gen.12.p1
+Gen.17.p1
+Gen.17.p2
+Gen.25.p1
+Gen.25.p2
+Gen.29.p2
+Gen.29.p3
+Gen.30.p1
+Gen.30.p2
+Gen.32.p3
+Gen.35.p1
+Gen.35.p2
+Gen.36.p1
+Gen.36.p2

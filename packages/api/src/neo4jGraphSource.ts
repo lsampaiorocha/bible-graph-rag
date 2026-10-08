@@ -1,4 +1,15 @@
-import type { AliasHit, ExpansionRow, GraphSource } from "@kgrag/retrieval";
+import {
+	type AliasHit,
+	type EdgeDetail,
+	type EntityCard,
+	type ExpansionRow,
+	type GraphSource,
+	type LineageDirection,
+	type LinkRow,
+	MAX_LINEAGE_DEPTH,
+	MAX_LINEAGE_LINKS,
+	type Relation,
+} from "@kgrag/retrieval";
 import neo4j, { type Driver } from "neo4j-driver";
 
 export interface GraphView {
@@ -44,6 +55,10 @@ export interface EntityDetails {
 		supportCount: number;
 	}[];
 }
+
+const LINK_RETURN = `RETURN e.id AS edgeId, type(e) AS type, startNode(e).id AS source, endNode(e).id AS target,
+			        startNode(e).name AS sourceLabel, endNode(e).name AS targetLabel,
+			        e.support_count AS supportCount`;
 
 export class Neo4jGraphSource implements GraphSource {
 	private readonly driver: Driver;
@@ -99,6 +114,118 @@ export class Neo4jGraphSource implements GraphSource {
 			        n.id AS neighbourId, n.name AS neighbourLabel
 			 ORDER BY fromId, supportCount DESC, edgeId`,
 			{ frontierIds, fetchPerNode: neo4j.int(fetchPerNode) },
+		);
+	}
+
+	async lineage(
+		personId: string,
+		direction: LineageDirection,
+		maxDepth: number,
+	): Promise<LinkRow[]> {
+		// Each link's depth is how many generations its far end lies from the person.
+		const path =
+			direction === "ancestors"
+				? `(:Person)-[:FATHER_OF|MOTHER_OF*1..${MAX_LINEAGE_DEPTH}]->(:Person {id: $personId})`
+				: `(:Person {id: $personId})-[:FATHER_OF|MOTHER_OF*1..${MAX_LINEAGE_DEPTH}]->(:Person)`;
+		const depthAt = direction === "ancestors" ? "length(p) - i" : "i + 1";
+		return this.rows<LinkRow>(
+			`MATCH p = ${path}
+			 WHERE length(p) <= $maxDepth
+			 UNWIND range(0, length(p) - 1) AS i
+			 WITH relationships(p)[i] AS e, ${depthAt} AS depth
+			 WITH e, min(depth) AS depth
+			 ${LINK_RETURN}, depth
+			 ORDER BY depth, edgeId LIMIT $limit`,
+			{
+				personId,
+				maxDepth: neo4j.int(Math.min(maxDepth, MAX_LINEAGE_DEPTH)),
+				limit: neo4j.int(MAX_LINEAGE_LINKS),
+			},
+		);
+	}
+
+	async relatives(personId: string, relation: Relation): Promise<LinkRow[]> {
+		const gender =
+			{
+				sons: "male",
+				brothers: "male",
+				daughters: "female",
+				sisters: "female",
+			}[relation as string] ?? null;
+		const direct: Record<Relation, string> = {
+			father: "MATCH (:Person)-[e:FATHER_OF]->(:Person {id: $personId})",
+			mother: "MATCH (:Person)-[e:MOTHER_OF]->(:Person {id: $personId})",
+			parents:
+				"MATCH (:Person)-[e:FATHER_OF|MOTHER_OF]->(:Person {id: $personId})",
+			children:
+				"MATCH (:Person {id: $personId})-[e:FATHER_OF|MOTHER_OF]->(r:Person)",
+			sons: "MATCH (:Person {id: $personId})-[e:FATHER_OF|MOTHER_OF]->(r:Person) WHERE r.gender = $gender",
+			daughters:
+				"MATCH (:Person {id: $personId})-[e:FATHER_OF|MOTHER_OF]->(r:Person) WHERE r.gender = $gender",
+			spouses: "MATCH (:Person {id: $personId})-[e:SPOUSE_OF]-(:Person)",
+			siblings: "MATCH (:Person {id: $personId})-[e:SIBLING_OF]-(r:Person)",
+			brothers:
+				"MATCH (:Person {id: $personId})-[e:SIBLING_OF]-(r:Person) WHERE r.gender = $gender",
+			sisters:
+				"MATCH (:Person {id: $personId})-[e:SIBLING_OF]-(r:Person) WHERE r.gender = $gender",
+		};
+		const queries = [`${direct[relation]} ${LINK_RETURN}, 1 AS depth`];
+		if (
+			relation === "siblings" ||
+			relation === "brothers" ||
+			relation === "sisters"
+		) {
+			queries.push(
+				`MATCH (parent:Person)-[e:FATHER_OF|MOTHER_OF]->(:Person {id: $personId}),
+				       (parent)-[:FATHER_OF|MOTHER_OF]->(r:Person)
+				 WHERE r.id <> $personId AND ($gender IS NULL OR r.gender = $gender)
+				 ${LINK_RETURN}, 1 AS depth`,
+				`MATCH (parent:Person)-[:FATHER_OF|MOTHER_OF]->(:Person {id: $personId}),
+				       (parent)-[e:FATHER_OF|MOTHER_OF]->(r:Person)
+				 WHERE r.id <> $personId AND ($gender IS NULL OR r.gender = $gender)
+				 ${LINK_RETURN}, 2 AS depth`,
+			);
+		}
+		const rows = (
+			await Promise.all(
+				queries.map((query) => this.rows<LinkRow>(query, { personId, gender })),
+			)
+		).flat();
+		const byEdge = new Map<string, LinkRow>();
+		for (const row of rows) {
+			const known = byEdge.get(row.edgeId);
+			if (!known || row.depth < known.depth) byEdge.set(row.edgeId, row);
+		}
+		return [...byEdge.values()].sort(
+			(a, b) => a.depth - b.depth || (a.edgeId < b.edgeId ? -1 : 1),
+		);
+	}
+
+	async entityCards(ids: string[]): Promise<EntityCard[]> {
+		return this.rows<EntityCard>(
+			`MATCH (e:Entity) WHERE e.id IN $ids
+			 RETURN e.id AS id, e.name AS label, e.kind AS kind, e.gender AS gender,
+			        coalesce(e.description, '') AS description, e.first_verse AS firstVerse,
+			        e.mention_count AS mentionCount
+			 ORDER BY id`,
+			{ ids },
+		);
+	}
+
+	async edgeDetails(ids: string[]): Promise<EdgeDetail[]> {
+		return this.rows<EdgeDetail>(
+			`MATCH (:Entity)-[e]->(:Entity) WHERE e.id IN $ids
+			 RETURN e.id AS id, coalesce(e.description, '') AS description,
+			        coalesce(e.evidence_verses, []) AS evidenceVerses, e.other_label AS otherLabel
+			 ORDER BY id`,
+			{ ids },
+		);
+	}
+
+	async verses(refs: string[]): Promise<{ id: string; text: string }[]> {
+		return this.rows<{ id: string; text: string }>(
+			"UNWIND $refs AS ref MATCH (v:Verse {id: ref}) RETURN v.id AS id, v.text AS text",
+			{ refs: [...new Set(refs)] },
 		);
 	}
 

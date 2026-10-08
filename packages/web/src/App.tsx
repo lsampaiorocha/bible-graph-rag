@@ -1,5 +1,6 @@
 import type { RetrievalTrace } from "@kgrag/retrieval";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { AnswerPanel } from "./AnswerPanel.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
 import {
 	type GraphData,
@@ -9,13 +10,14 @@ import {
 } from "./GraphView.tsx";
 
 const EXAMPLE_QUESTIONS = [
+	"Who were the ancestors of Noah?",
 	"Who were the sons of Noah?",
 	"Who did Jacob marry?",
 	"What happened at Bethel?",
 	"Who was Lot?",
 ];
 
-type PanelTab = "details" | "trace";
+type PanelTab = "answer" | "details" | "trace";
 
 export function App() {
 	const [graph, setGraph] = useState<GraphData | null>(null);
@@ -25,7 +27,13 @@ export function App() {
 	const [loading, setLoading] = useState(false);
 	const [mode, setMode] = useState<ViewMode>("focused");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	const [tab, setTab] = useState<PanelTab>("details");
+	const [tab, setTab] = useState<PanelTab>("answer");
+	const [useLlm, setUseLlm] = useState(true);
+	const [elapsed, setElapsed] = useState(0);
+	const labelById = useMemo(
+		() => new Map(graph?.nodes.map((node) => [node.id, node.label])),
+		[graph],
+	);
 
 	useEffect(() => {
 		fetch("/api/graph")
@@ -42,6 +50,13 @@ export function App() {
 			);
 	}, []);
 
+	useEffect(() => {
+		if (!loading) return;
+		setElapsed(0);
+		const timer = setInterval(() => setElapsed((seconds) => seconds + 1), 1000);
+		return () => clearInterval(timer);
+	}, [loading]);
+
 	async function ask(text: string) {
 		setQuestion(text);
 		setLoading(true);
@@ -50,14 +65,16 @@ export function App() {
 			const response = await fetch("/api/query", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ text, mode: "local" }),
+				body: JSON.stringify({ text, mode: "agent", llm: useLlm }),
 			});
 			const body = await response.json();
 			if (!response.ok)
 				throw new Error(body.error ?? `HTTP ${response.status}`);
 			setTrace(body);
-			setSelectedId(body.seeds[0]?.node_id ?? null);
-			setTab("details");
+			setSelectedId(
+				body.steps?.[0]?.entity_id ?? body.seeds[0]?.node_id ?? null,
+			);
+			setTab("answer");
 		} catch (reason) {
 			setError(String(reason));
 		} finally {
@@ -75,15 +92,13 @@ export function App() {
 		if (id) setTab("details");
 	}
 
-	const count = (status: string) =>
-		trace?.nodes.filter((node) => node.status === status).length ?? 0;
 	const tabClass = (active: boolean) =>
 		`px-2 py-1 text-xs font-medium ${active ? "border-b-2 border-gray-900" : "text-gray-500 hover:text-gray-900"}`;
 
 	return (
 		<div className="flex h-full flex-col bg-white text-gray-900">
 			<header className="flex items-center gap-4 border-b border-gray-200 px-4 py-2">
-				<h1 className="font-semibold">Bible Graph RAG</h1>
+				<h1 className="font-semibold">Bible Graph</h1>
 				<span className="text-sm text-gray-500">
 					{graph
 						? `${graph.indexId} · ${graph.nodes.length} entities`
@@ -137,53 +152,72 @@ export function App() {
 							<button
 								key={example}
 								type="button"
+								disabled={loading}
 								onClick={() => void ask(example)}
-								className="rounded-full border border-gray-300 px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100"
+								className="rounded-full border border-gray-300 px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-50"
 							>
 								{example}
 							</button>
 						))}
 					</div>
+					<label className="flex items-center gap-2 text-xs text-gray-600">
+						<input
+							type="checkbox"
+							checked={useLlm}
+							onChange={(event) => setUseLlm(event.target.checked)}
+						/>
+						Answer with Claude: plans the graph queries and writes a cited
+						answer (about 10 s)
+					</label>
 					{error && (
 						<p className="rounded bg-red-50 p-2 text-sm text-red-700">
 							{error}
 						</p>
 					)}
-					{trace && (
-						<p className="text-sm">
-							Seeds:{" "}
-							<strong>
-								{trace.seeds.map((seed) => seed.matched_text).join(", ") ||
-									"none found"}
-							</strong>{" "}
-							· {count("context")} kept · {count("candidate")} dropped by the
-							neighbour cap
+					{loading && (
+						<p className="text-sm text-gray-500">
+							{useLlm
+								? `Planning, querying the graph, writing a cited answer… ${elapsed} s`
+								: "Querying the graph…"}
 						</p>
 					)}
 					<nav className="flex gap-2 border-b border-gray-200">
-						<button
-							type="button"
-							className={tabClass(tab === "details")}
-							onClick={() => setTab("details")}
-						>
-							Details
-						</button>
-						<button
-							type="button"
-							className={tabClass(tab === "trace")}
-							onClick={() => setTab("trace")}
-						>
-							Trace JSON
-						</button>
+						{(["answer", "details", "trace"] as const).map((option) => (
+							<button
+								key={option}
+								type="button"
+								className={tabClass(tab === option)}
+								onClick={() => setTab(option)}
+							>
+								{option === "answer"
+									? "Answer"
+									: option === "details"
+										? "Details"
+										: "Trace JSON"}
+							</button>
+						))}
 					</nav>
 					<div className="min-h-0 flex-1 overflow-auto">
+						{tab === "answer" &&
+							(trace ? (
+								<AnswerPanel
+									trace={trace}
+									labelById={labelById}
+									onSelect={select}
+								/>
+							) : (
+								<p className="text-sm text-gray-500">
+									Ask a question. The agent picks graph queries, then answers
+									with citations you can click.
+								</p>
+							))}
 						{tab === "details" &&
 							(selectedId ? (
 								<EntityPanel entityId={selectedId} onSelect={select} />
 							) : (
 								<p className="text-sm text-gray-500">
-									Ask a question, then click any node to see its description,
-									relationships and the verses where it is named.
+									Click any node to see its description, relationships and the
+									verses where it is named.
 								</p>
 							))}
 						{tab === "trace" && (

@@ -8,6 +8,7 @@ export const Mode = z.enum([
 	"global_lite",
 	"vector",
 	"closed_book",
+	"agent",
 ]);
 const PrunedReason = z.enum(["neighbour_cap", "rank_cutoff", "token_budget"]);
 
@@ -70,6 +71,24 @@ export const TraceChunk = z.object({
 	highlight_entity_ids: z.array(z.string()),
 });
 
+export const TraceStep = z.object({
+	index: z.number().int(),
+	tool: z.enum([
+		"find_entity",
+		"explore",
+		"ancestors",
+		"descendants",
+		"relatives",
+	]),
+	args: z.record(z.string(), z.union([z.string(), z.number()])),
+	entity_id: z.string().optional(),
+	candidates: z.array(z.string()).optional(),
+	node_ids: z.array(z.string()),
+	edge_ids: z.array(z.string()),
+	note: z.string().optional(),
+	ms: z.number(),
+});
+
 export const Answer = z.object({
 	text: z.string(),
 	sentences: z.array(
@@ -92,6 +111,7 @@ export const RetrievalTrace = z.object({
 		params: z.record(z.string(), z.union([z.number(), z.string()])),
 	}),
 	seeds: z.array(Seed),
+	steps: z.array(TraceStep).optional(),
 	nodes: z.array(TraceNode),
 	edges: z.array(TraceEdge),
 	paths: z.array(TracePath),
@@ -104,6 +124,7 @@ export const RetrievalTrace = z.object({
 		truncated: z.boolean(),
 	}),
 	answer: Answer.nullable(),
+	warnings: z.array(z.string()).optional(),
 	metrics: z.object({
 		timings_ms: z.record(z.string(), z.number()),
 		usage: z
@@ -121,4 +142,7 @@ export type Status = z.infer<typeof Status>;
 export type Seed = z.infer<typeof Seed>;
 export type TraceNode = z.infer<typeof TraceNode>;
 export type TraceEdge = z.infer<typeof TraceEdge>;
+export type TraceStep = z.infer<typeof TraceStep>;
+export type TraceChunk = z.infer<typeof TraceChunk>;
+export type Answer = z.infer<typeof Answer>;
 export type RetrievalTrace = z.infer<typeof RetrievalTrace>;

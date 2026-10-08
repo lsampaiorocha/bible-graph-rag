@@ -28,7 +28,7 @@ export interface GraphData {
 }
 
 export type ViewMode = "focused" | "whole";
-type VizStatus = "context" | "candidate" | "unreached";
+type VizStatus = "cited" | "context" | "candidate" | "unreached";
 
 interface VizNode {
 	id: string;
@@ -62,6 +62,7 @@ export const KIND_COLORS: Record<string, string> = {
 const CANDIDATE_COLOR = "#cbd5e1";
 const UNREACHED_COLOR = "#eef0f3";
 const REVEAL_STEP_MS = 700;
+const MAX_REVEAL_MS = 3000;
 const WHOLE_GRAPH_SCALE = 4;
 const MAX_LABEL_LENGTH = 24;
 
@@ -113,7 +114,7 @@ function buildFocusedGraph(
 					? via.target
 					: via.source
 				: undefined,
-			status: node.status === "candidate" ? "candidate" : "context",
+			status: node.status,
 		};
 	});
 	const links: GraphLink[] = trace.edges.map((edge) => {
@@ -132,7 +133,7 @@ function buildFocusedGraph(
 			targetId,
 			source: sourceId,
 			target: targetId,
-			status: edge.status === "candidate" ? "candidate" : "context",
+			status: edge.status,
 		};
 	});
 	return {
@@ -203,20 +204,14 @@ export function GraphView({
 	const traceNodeStatus = useMemo(
 		() =>
 			new Map<string, VizStatus>(
-				trace?.nodes.map((node) => [
-					node.id,
-					node.status === "candidate" ? "candidate" : "context",
-				]),
+				trace?.nodes.map((node) => [node.id, node.status]),
 			),
 		[trace],
 	);
 	const traceEdgeStatus = useMemo(
 		() =>
 			new Map<string, VizStatus>(
-				trace?.edges.map((edge) => [
-					edge.id,
-					edge.status === "candidate" ? "candidate" : "context",
-				]),
+				trace?.edges.map((edge) => [edge.id, edge.status]),
 			),
 		[trace],
 	);
@@ -229,7 +224,10 @@ export function GraphView({
 		if (!focused) return;
 		setRevealedHop(0);
 		const timers = Array.from({ length: focused.maxHop }, (_, index) =>
-			setTimeout(() => setRevealedHop(index + 1), REVEAL_STEP_MS * (index + 1)),
+			setTimeout(
+				() => setRevealedHop(index + 1),
+				Math.min(REVEAL_STEP_MS, MAX_REVEAL_MS / focused.maxHop) * (index + 1),
+			),
 		);
 		return () => timers.forEach(clearTimeout);
 	}, [focused]);
@@ -265,7 +263,12 @@ export function GraphView({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: graphData is the trigger, so the view refits whenever the displayed nodes change.
 	useEffect(() => {
 		needsFit.current = true;
-		if (mode !== "whole") return;
+		if (mode !== "whole") {
+			// Refit soon after each reveal too: waiting for the physics to settle leaves
+			// the newest generations off-screen for several seconds.
+			const timer = setTimeout(() => graphRef.current?.zoomToFit(400, 60), 450);
+			return () => clearTimeout(timer);
+		}
 		const focusIds = new Set(
 			trace?.nodes
 				.filter((node) => node.status !== "candidate")
@@ -290,6 +293,23 @@ export function GraphView({
 		graphRef.current?.d3Force("link")?.distance(45);
 	}, [width]);
 
+	const hasAnswer = Boolean(trace?.answer);
+	const lineage =
+		trace?.steps?.length &&
+		trace.steps.every((step) => step.tool === trace.steps?.[0]?.tool)
+			? trace.steps[0]?.tool
+			: undefined;
+	// A family line reads as a tree: ancestors stack upwards, descendants downwards.
+	const dagMode =
+		mode === "focused"
+			? ({ ancestors: "bu", descendants: "td" } as const)[
+					lineage as "ancestors" | "descendants"
+				]
+			: undefined;
+	const shown = (status: VizStatus) =>
+		status === "cited" || status === "context";
+	// Once an answer exists, what it cites stays bright and what was only retrieved dims.
+	const dimmed = (status: VizStatus) => hasAnswer && status === "context";
 	const isSeed = (node: GraphNode) => seedIds.has(String(node.id));
 	const statusOf = (node: GraphNode): VizStatus =>
 		node.status ??
@@ -310,7 +330,10 @@ export function GraphView({
 		const status = statusOf(node);
 		if (status === "candidate") return "dropped by the neighbour cap";
 		if (status === "unreached") return "not reached by this query";
-		return trace ? `kept · hop ${node.hop}` : "";
+		if (status === "cited") return `cited in the answer · hop ${node.hop}`;
+		return trace
+			? `${hasAnswer ? "retrieved, not cited" : "kept"} · hop ${node.hop}`
+			: "";
 	};
 
 	return (
@@ -322,6 +345,9 @@ export function GraphView({
 					height={height}
 					graphData={graphData}
 					cooldownTicks={mode === "whole" ? 0 : 200}
+					dagMode={dagMode}
+					dagLevelDistance={55}
+					onDagError={() => undefined}
 					d3VelocityDecay={0.35}
 					onEngineStop={() => {
 						if (mode === "focused" && needsFit.current) {
@@ -337,6 +363,7 @@ export function GraphView({
 						const radius = radiusOf(node);
 						const x = node.x ?? 0;
 						const y = node.y ?? 0;
+						context.globalAlpha = dimmed(status) ? 0.35 : 1;
 						context.beginPath();
 						context.arc(x, y, radius, 0, 2 * Math.PI);
 						context.fillStyle =
@@ -352,10 +379,10 @@ export function GraphView({
 								node.id === selectedId ? "#f43f5e" : "#111827";
 							context.stroke();
 						}
-						if (status === "context") {
+						if (shown(status)) {
 							const label = shortLabel(node.label);
 							const fontSize = 12 / scale;
-							context.font = `${isSeed(node) ? "600 " : ""}${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+							context.font = `${isSeed(node) || status === "cited" ? "600 " : ""}${fontSize}px ui-sans-serif, system-ui, sans-serif`;
 							context.textAlign = "center";
 							context.textBaseline = "top";
 							context.lineWidth = 3 / scale;
@@ -364,6 +391,7 @@ export function GraphView({
 							context.fillStyle = "#111827";
 							context.fillText(label, x, y + radius + 2 / scale);
 						}
+						context.globalAlpha = 1;
 					}}
 					nodePointerAreaPaint={(node, color, context) => {
 						context.beginPath();
@@ -379,12 +407,17 @@ export function GraphView({
 					}}
 					linkColor={(link) =>
 						({
-							context: "#64748b",
+							cited: "#1d4ed8",
+							context: hasAnswer ? "#cbd5e1" : "#64748b",
 							candidate: "#d6dbe2",
 							unreached: "rgba(15,23,42,0.05)",
 						})[linkStatusOf(link)]
 					}
-					linkWidth={(link) => (linkStatusOf(link) === "context" ? 1.6 : 0.6)}
+					linkWidth={(link) =>
+						({ cited: 2.2, context: 1.6, candidate: 0.6, unreached: 0.6 })[
+							linkStatusOf(link)
+						]
+					}
 					linkLineDash={(link) =>
 						linkStatusOf(link) === "candidate" ? [3, 3] : null
 					}
@@ -392,7 +425,10 @@ export function GraphView({
 						`${escapeHtml(labelById.get(link.fromId) ?? link.fromId)} —${link.type}→ ${escapeHtml(labelById.get(link.toId) ?? link.toId)}`
 					}
 					linkDirectionalParticles={(link) =>
-						linkStatusOf(link) === "context" && mode === "focused" ? 2 : 0
+						mode === "focused" &&
+						linkStatusOf(link) === (hasAnswer ? "cited" : "context")
+							? 2
+							: 0
 					}
 					linkDirectionalParticleWidth={2.5}
 					linkDirectionalParticleSpeed={0.008}

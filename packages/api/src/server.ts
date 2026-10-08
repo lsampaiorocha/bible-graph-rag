@@ -1,14 +1,17 @@
 import { serve } from "@hono/node-server";
-import { runLocal } from "@kgrag/retrieval";
+import { runAgent, runLocal } from "@kgrag/retrieval";
 import { Hono } from "hono";
 import neo4j from "neo4j-driver";
 import { z } from "zod";
+import { ClaudeCliClient } from "./claudeCli.ts";
 import { Neo4jGraphSource } from "./neo4jGraphSource.ts";
 
 const PORT = 8787;
 const QueryRequest = z.object({
 	text: z.string().min(1).max(500),
-	mode: z.literal("local"),
+	mode: z.enum(["local", "agent"]),
+	// false = keyword planning, no LLM: what the public site does without a key.
+	llm: z.boolean().default(true),
 });
 
 process.loadEnvFile(new URL("../../../.env", import.meta.url));
@@ -23,6 +26,12 @@ const driver = neo4j.driver(
 	},
 );
 const source = new Neo4jGraphSource(driver);
+const llm = new ClaudeCliClient({
+	model: process.env.KGRAG_AGENT_MODEL ?? "claude-haiku-5-5",
+	effort: process.env.KGRAG_AGENT_EFFORT ?? "medium",
+	maxCallUsd: 0.1,
+	projectBudgetUsd: Number(process.env.KGRAG_PROJECT_BUDGET_USD ?? 40),
+});
 
 const app = new Hono();
 app.get("/api/graph", async (context) =>
@@ -40,7 +49,11 @@ app.post("/api/query", async (context) => {
 	);
 	if (!request.success)
 		return context.json({ error: z.prettifyError(request.error) }, 400);
-	return context.json(await runLocal(source, request.data.text));
+	const { text, mode } = request.data;
+	if (mode === "local") return context.json(await runLocal(source, text));
+	return context.json(
+		await runAgent(source, text, request.data.llm ? llm : null),
+	);
 });
 
 serve({ fetch: app.fetch, port: PORT }, () =>

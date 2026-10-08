@@ -9,12 +9,12 @@ export interface LocalParams {
 
 export const DEFAULT_LOCAL_PARAMS: LocalParams = { maxHops: 2, topM: 8 };
 
-interface SeedMatch {
+export interface SeedMatch {
 	seed: Seed;
 	label: string;
 }
 
-async function findSeeds(
+export async function findSeeds(
 	source: GraphSource,
 	question: string,
 ): Promise<SeedMatch[]> {
@@ -51,25 +51,20 @@ async function findSeeds(
 	return [...seeds.values()];
 }
 
-export async function runLocal(
-	source: GraphSource,
-	question: string,
-	params: LocalParams = DEFAULT_LOCAL_PARAMS,
-): Promise<RetrievalTrace> {
-	const started = performance.now();
-	const seedMatches = await findSeeds(source, question);
-	const seeded = performance.now();
+export interface Subgraph {
+	nodes: Map<string, TraceNode>;
+	edges: Map<string, TraceEdge>;
+}
 
+export async function expandFrom(
+	source: GraphSource,
+	seeds: { id: string; label: string }[],
+	params: LocalParams,
+): Promise<Subgraph> {
 	const nodes = new Map<string, TraceNode>();
 	const edges = new Map<string, TraceEdge>();
-	for (const { seed, label } of seedMatches) {
-		nodes.set(seed.node_id, {
-			id: seed.node_id,
-			label,
-			hop: 0,
-			score: 1,
-			status: "context",
-		});
+	for (const { id, label } of seeds) {
+		nodes.set(id, { id, label, hop: 0, score: 1, status: "context" });
 	}
 
 	let frontier = [...nodes.keys()];
@@ -116,22 +111,28 @@ export async function runLocal(
 		}
 		frontier = nextFrontier;
 	}
-	const expanded = performance.now();
+	return { nodes, edges };
+}
 
+export function orderSubgraph(subgraph: Subgraph): {
+	nodes: TraceNode[];
+	edges: TraceEdge[];
+	handles: Record<string, string>;
+} {
 	const maxSupport = Math.max(
 		1,
-		...[...edges.values()].map((edge) => edge.score),
+		...[...subgraph.edges.values()].map((edge) => edge.score),
 	);
-	const orderedNodes = [...nodes.values()].sort(
+	const nodes = [...subgraph.nodes.values()].sort(
 		(a, b) => a.hop - b.hop || compareText(a.id, b.id),
 	);
-	const orderedEdges = [...edges.values()]
+	const edges = [...subgraph.edges.values()]
 		.map((edge) => ({ ...edge, score: edge.score / maxSupport }))
 		.sort((a, b) => a.hop - b.hop || compareText(a.id, b.id));
 	const handles: Record<string, string> = {};
 	for (const [prefix, elements] of [
-		["E", orderedNodes],
-		["R", orderedEdges],
+		["E", nodes],
+		["R", edges],
 	] as const) {
 		let next = 1;
 		for (const element of elements) {
@@ -141,6 +142,24 @@ export async function runLocal(
 			}
 		}
 	}
+	return { nodes, edges, handles };
+}
+
+export async function runLocal(
+	source: GraphSource,
+	question: string,
+	params: LocalParams = DEFAULT_LOCAL_PARAMS,
+): Promise<RetrievalTrace> {
+	const started = performance.now();
+	const seedMatches = await findSeeds(source, question);
+	const seeded = performance.now();
+	const subgraph = await expandFrom(
+		source,
+		seedMatches.map(({ seed, label }) => ({ id: seed.node_id, label })),
+		params,
+	);
+	const expanded = performance.now();
+	const { nodes, edges, handles } = orderSubgraph(subgraph);
 
 	return {
 		trace_version: "1.0",
@@ -154,8 +173,8 @@ export async function runLocal(
 			params: { max_hops: params.maxHops, top_m: params.topM },
 		},
 		seeds: seedMatches.map(({ seed }) => seed),
-		nodes: orderedNodes,
-		edges: orderedEdges,
+		nodes,
+		edges,
 		paths: [],
 		communities: [],
 		chunks: [],

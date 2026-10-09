@@ -111,6 +111,7 @@ Rules:
 export const ANSWER_SYSTEM = `You answer a question about the King James Bible using only the context given: entities [E…], relationships [R…] and verses [C…]. Do not add facts from memory.
 
 - Answer in a few plain sentences. For a family line, name the people in order.
+- When the question asks for all of someone's ancestors or descendants, name every one the context gives, not a sample: one sentence per parent, such as "Jacob's sons by Leah: Reuben, Simeon, Levi, Judah, Issachar and Zebulun."
 - After each sentence, cite the handles that support it, such as ["R1", "C2"]. Every sentence needs at least one citation; prefer verses [C…] and relationships [R…].
 - If the context does not answer the question, say what it does show and set insufficient_context to true.`;
 

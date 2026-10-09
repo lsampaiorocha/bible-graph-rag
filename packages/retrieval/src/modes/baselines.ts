@@ -5,7 +5,7 @@ import type { RetrievalTrace, TraceChunk } from "../trace.ts";
 
 export const VECTOR_TOP_K = 5;
 
-export const CLOSED_BOOK_SYSTEM = `You answer a question about the King James Bible from memory; no documents are given. Answer in a few plain sentences, naming the people involved. Leave every cites list empty. If you do not know, say so and set insufficient_context to true.`;
+export const CLOSED_BOOK_SYSTEM = `You answer a question about the King James Bible from memory; no documents are given. Answer in a few plain sentences, naming the people involved. When the question asks for all of someone's ancestors or descendants, name every one you know, one sentence per parent. Leave every cites list empty. If you do not know, say so and set insufficient_context to true.`;
 
 function baseTrace(
 	question: string,

@@ -162,9 +162,14 @@ export class Neo4jGraphSource implements GraphSource {
 		reach: number,
 		types: readonly string[] | null,
 	): Promise<LinkRow[]> {
+		// Cypher rejects a {0,0} quantifier, so reach 0 matches the given entities directly.
+		const inside =
+			reach > 0
+				? `MATCH (start:Entity) WHERE start.id IN $ids
+				   MATCH (start)((:Entity)-[r WHERE $types IS NULL OR type(r) IN $types]-(:Entity)){0,${reach}}(n:Entity)`
+				: "MATCH (n:Entity) WHERE n.id IN $ids";
 		return this.rows<LinkRow>(
-			`MATCH (start:Entity) WHERE start.id IN $ids
-			 MATCH (start)((:Entity)-[r WHERE $types IS NULL OR type(r) IN $types]-(:Entity)){0,${reach}}(n:Entity)
+			`${inside}
 			 WITH collect(DISTINCT n) AS inside
 			 UNWIND inside AS a
 			 MATCH (a)-[e]->(b:Entity)

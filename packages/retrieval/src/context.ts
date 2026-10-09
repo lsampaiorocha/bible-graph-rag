@@ -148,6 +148,10 @@ export async function buildContext(
 
 // Checks every citation against the context, then promotes what the answer used: a cited
 // handle, and both ends of a cited relationship, become "cited".
+// Long answers sometimes repeat their handles inside a sentence ("... [E9, R4]"); they
+// count as citations and come out of the text the reader sees.
+const INLINE_HANDLES = /\s*\[([ERC]\d+(?:\s*,\s*[ERC]\d+)*)\]/g;
+
 export function applyAnswer(
 	raw: RawAnswer,
 	handles: Record<string, string>,
@@ -159,14 +163,17 @@ export function applyAnswer(
 	const cited = new Set<string>();
 	const sentences = raw.sentences.map(({ text, cites }) => {
 		const ids: string[] = [];
-		for (const rawHandle of cites) {
+		const inline = [...text.matchAll(INLINE_HANDLES)].flatMap((match) =>
+			(match[1] ?? "").split(/\s*,\s*/),
+		);
+		for (const rawHandle of [...cites, ...inline]) {
 			const handle = rawHandle.replace(/[[\]\s]/g, "");
 			const id = handles[handle];
 			if (id === undefined) invalid.add(handle);
 			else if (!ids.includes(id)) ids.push(id);
 		}
 		for (const id of ids) cited.add(id);
-		return { text, cites: ids };
+		return { text: text.replace(INLINE_HANDLES, "").trim(), cites: ids };
 	});
 	for (const edge of edges) {
 		if (cited.has(edge.id)) {

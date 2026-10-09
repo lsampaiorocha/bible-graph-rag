@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from kgrag.corpus import DATA_DIR
-from kgrag.llm import BudgetExceeded, ClaudeCodeClient, LLMCallError, ModelConfig
+from kgrag.llm import BudgetExceeded, LLMCallError, LLMClient, ModelConfig
 from kgrag.schema import PassageExtraction
 from kgrag.validate import validate_extraction
 
@@ -38,7 +38,7 @@ def extraction_dir(config: ModelConfig) -> Path:
 
 
 def extract_passage(
-    client: ClaudeCodeClient, system_prompt: str, passage: dict, out_dir: Path
+    client: LLMClient, system_prompt: str, passage: dict, out_dir: Path
 ) -> bool:
     result = client.call(
         passage["id"], system_prompt, user_prompt(passage), PassageExtraction
@@ -68,7 +68,7 @@ def extract_passage(
 
 
 def extract_passages(
-    client: ClaudeCodeClient, passages: list[dict], out_dir: Path, workers: int
+    client: LLMClient, passages: list[dict], out_dir: Path, workers: int
 ) -> ExtractionSummary:
     system_prompt = load_system_prompt()
     summary = ExtractionSummary()

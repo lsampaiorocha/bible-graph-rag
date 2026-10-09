@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from kgrag.build import edge_id
-from kgrag.llm import ClaudeCodeClient
+from kgrag.llm import LLMClient
 
 PROMPT_VERSION = "confirm_parent_v1"
 PURPOSE = "parent_confirm"
@@ -208,7 +208,7 @@ def confirmation_prompt(
 
 
 def llm_parent_confirmer(
-    client: ClaudeCodeClient, names: dict[str, str], verse_text: dict[str, str]
+    client: LLMClient, names: dict[str, str], verse_text: dict[str, str]
 ) -> ParentConfirmer:
     system_prompt = load_prompt()
 

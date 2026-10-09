@@ -12,7 +12,15 @@ from kgrag.build import INDEX_DIR
 from kgrag.cli import project_budget_usd
 from kgrag.corpus import CORPUS_DIR, REPO_ROOT, read_jsonl, read_passage_ids
 from kgrag.extract import extraction_dir, load_extractions
-from kgrag.llm import Budget, BudgetExceeded, ClaudeCodeClient, Ledger, ModelConfig
+from kgrag.llm import (
+    DEFAULT_JUDGE_MODEL,
+    DEFAULT_MODEL,
+    Budget,
+    BudgetExceeded,
+    Ledger,
+    LLMClient,
+    ModelConfig,
+)
 from kgrag_eval.bakeoff import ConfigScore, load_extraction, score_passage
 from kgrag_eval.entities import align_mentions, majority, score_entities
 from kgrag_eval.fixture import FIXTURE_DIR, make_fixture
@@ -382,7 +390,7 @@ def narrative_sample(
 @app.command()
 def fixture(
     index_id: str = typer.Option("gen-v1", "--index"),
-    model: str = typer.Option("claude-haiku-5-5"),
+    model: str = typer.Option(DEFAULT_MODEL),
     effort: str = typer.Option("medium"),
 ) -> None:
     """Regenerate the Genesis regression fixture and its expected report after an intended change."""
@@ -413,7 +421,7 @@ def fixture(
 @app.command()
 def qa(
     run_id: str = typer.Option(..., "--run", help="Folder name under eval/runs."),
-    judge_model: str = typer.Option("claude-sonnet-5-5"),
+    judge_model: str = typer.Option(DEFAULT_JUDGE_MODEL),
     judge_effort: str = typer.Option("medium"),
     index_id: str = typer.Option("gen-v1", "--index"),
     run_budget_usd: float = typer.Option(1.0),
@@ -506,7 +514,7 @@ def qa(
         budget = Budget(run_budget_usd, project_budget_usd(), 0.10, ledger.total_cost())
     except BudgetExceeded as error:
         raise typer.Exit(f"stopped: {error}") from error
-    client = ClaudeCodeClient(
+    client = LLMClient(
         ModelConfig(judge_model, judge_effort),
         budget=budget,
         ledger=ledger,

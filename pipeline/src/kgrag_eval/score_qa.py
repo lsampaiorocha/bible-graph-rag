@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from kgrag.llm import ClaudeCodeClient
+from kgrag.llm import LLMClient
 from kgrag_eval.graph_score import gold_family_triples
 from kgrag_eval.theographic import Gold
 
@@ -187,7 +187,7 @@ def source_lines(
 
 
 def check_grounding(
-    client: ClaudeCodeClient,
+    client: LLMClient,
     pairs: list[tuple[dict, dict]],
     verse_text: dict[str, str],
     passage_text: dict[str, str],
@@ -290,7 +290,7 @@ def judge_prompt(question: dict, answer: str) -> str:
 
 
 def judge_rows(
-    client: ClaudeCodeClient, rows: list[dict], questions: dict[str, dict], workers: int
+    client: LLMClient, rows: list[dict], questions: dict[str, dict], workers: int
 ) -> None:
     def judge(row: dict) -> None:
         result = client.call(

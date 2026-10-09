@@ -1,21 +1,34 @@
 import hashlib
 import json
+import os
 import statistics
 import subprocess
 import threading
+import time
+import urllib.error
+import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
-from kgrag.corpus import DATA_DIR
+from kgrag.corpus import DATA_DIR, REPO_ROOT
+
+load_dotenv(REPO_ROOT / ".env")
 
 CACHE_DIR = DATA_DIR / "cache" / "llm"
 LEDGER_PATH = DATA_DIR / "ledger" / "llm_calls.jsonl"
 
+DEFAULT_MODEL = os.environ.get("KGRAG_MODEL", "claude-haiku-5-5")
+DEFAULT_JUDGE_MODEL = os.environ.get("KGRAG_JUDGE_MODEL", "claude-sonnet-5-5")
+
 Runner = Callable[[list[str], str], dict]
+# (config, system prompt, JSON schema, per-call cap in USD, user prompt) -> a response in
+# the shape `claude -p --output-format json` prints, whatever the provider.
+Transport = Callable[["ModelConfig", str, dict, float, str], dict]
 
 
 class BudgetExceeded(Exception):
@@ -92,6 +105,104 @@ def run_claude_code(command: list[str], prompt: str) -> dict:
         raise LLMCallError(
             f"claude -p returned no JSON: {completed.stderr.strip()[:500]}"
         ) from error
+
+
+def claude_code_transport(
+    config: ModelConfig,
+    system_prompt: str,
+    json_schema: dict,
+    max_call_usd: float,
+    prompt: str,
+    runner: Runner = run_claude_code,
+) -> dict:
+    return runner(
+        claude_code_command(config, system_prompt, json_schema, max_call_usd), prompt
+    )
+
+
+def parse_json_output(content: str) -> object:
+    # Some models wrap JSON in a ```json fence even when asked for a schema.
+    text = (
+        content.strip().removeprefix("```json").removeprefix("```").removesuffix("```")
+    )
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def openai_compatible_transport(
+    config: ModelConfig,
+    system_prompt: str,
+    json_schema: dict,
+    max_call_usd: float,
+    prompt: str,
+) -> dict:
+    # Any server speaking the OpenAI chat API: OpenAI, Ollama, vLLM, LM Studio,
+    # OpenRouter. They report tokens but not cost, so cost comes from the prices set in
+    # .env (zero for local models), and the per-call cap cannot be enforced server-side.
+    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip(
+        "/"
+    )
+    body = {
+        "model": config.model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "output", "schema": json_schema, "strict": False},
+        },
+    }
+    request = urllib.request.Request(
+        f"{base_url}/chat/completions",
+        data=json.dumps(body).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'none')}",
+        },
+    )
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=600) as response:
+            payload = json.load(response)
+    except urllib.error.HTTPError as error:
+        return {
+            "is_error": True,
+            "result": f"HTTP {error.code}: {error.read().decode()[:300]}",
+        }
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise LLMCallError(f"no answer from {base_url}: {error}") from error
+    usage = payload.get("usage") or {}
+    input_tokens = usage.get("prompt_tokens", 0)
+    output_tokens = usage.get("completion_tokens", 0)
+    price_in = float(os.environ.get("KGRAG_PRICE_INPUT_PER_MTOK", 0))
+    price_out = float(os.environ.get("KGRAG_PRICE_OUTPUT_PER_MTOK", 0))
+    return {
+        "is_error": False,
+        "structured_output": parse_json_output(
+            payload["choices"][0]["message"].get("content") or ""
+        ),
+        "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+        "total_cost_usd": (input_tokens * price_in + output_tokens * price_out) / 1e6,
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
+
+
+TRANSPORTS: dict[str, Transport] = {
+    "claude-code": claude_code_transport,
+    "openai": openai_compatible_transport,
+}
+
+
+def default_transport() -> Transport:
+    provider = os.environ.get("KGRAG_LLM_PROVIDER", "claude-code")
+    if provider not in TRANSPORTS:
+        raise LLMCallError(
+            f"KGRAG_LLM_PROVIDER={provider!r}; use one of {', '.join(TRANSPORTS)}"
+        )
+    return TRANSPORTS[provider]
 
 
 def usage_from_response(response: dict) -> CallUsage:
@@ -221,7 +332,7 @@ class Budget:
             self.spent_this_run_usd += actual_usd
 
 
-class ClaudeCodeClient:
+class LLMClient:
     def __init__(
         self,
         config: ModelConfig,
@@ -229,7 +340,7 @@ class ClaudeCodeClient:
         ledger: Ledger,
         run_id: str,
         purpose: str,
-        runner: Runner = run_claude_code,
+        transport: Transport | None = None,
         cache_dir: Path = CACHE_DIR,
         max_attempts: int = 3,
     ) -> None:
@@ -238,7 +349,7 @@ class ClaudeCodeClient:
         self.ledger = ledger
         self.run_id = run_id
         self.purpose = purpose
-        self.runner = runner
+        self.transport = transport or default_transport()
         self.cache_dir = cache_dir
         self.max_attempts = max_attempts
 
@@ -284,13 +395,11 @@ class ClaudeCodeClient:
             reserved = self.budget.reserve()
             response: dict = {}
             try:
-                response = self.runner(
-                    claude_code_command(
-                        self.config,
-                        system_prompt,
-                        output_model.model_json_schema(),
-                        reserved,
-                    ),
+                response = self.transport(
+                    self.config,
+                    system_prompt,
+                    output_model.model_json_schema(),
+                    reserved,
                     user_prompt,
                 )
             finally:

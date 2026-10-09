@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from kgrag.build import edge_id
-from kgrag.llm import ClaudeCodeClient
+from kgrag.llm import LLMClient
 
 PROMPT_VERSION = "check_kinship_word_v1"
 PURPOSE = "kinship_check"
@@ -188,7 +188,7 @@ def check_prompt(
 
 
 def llm_kinship_checker(
-    client: ClaudeCodeClient, names: dict[str, str], verse_text: dict[str, str]
+    client: LLMClient, names: dict[str, str], verse_text: dict[str, str]
 ) -> KinshipChecker:
     system_prompt = load_prompt()
 

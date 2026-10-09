@@ -6,11 +6,14 @@ from pydantic import BaseModel
 from kgrag.llm import (
     Budget,
     BudgetExceeded,
-    ClaudeCodeClient,
     Ledger,
     LLMCallError,
+    LLMClient,
     ModelConfig,
     claude_code_command,
+    claude_code_transport,
+    default_transport,
+    openai_compatible_transport,
 )
 
 
@@ -103,18 +106,18 @@ def test_client_retries_invalid_output_caches_the_valid_one_and_records_every_pa
     responses = [fake_response({"wrong": "shape"}), fake_response({"word": "OK"})]
     calls = []
 
-    def runner(command, prompt):
+    def transport(config, system_prompt, json_schema, max_call_usd, prompt):
         calls.append(prompt)
         return responses.pop(0)
 
     ledger = Ledger(tmp_path / "ledger.jsonl")
-    client = ClaudeCodeClient(
+    client = LLMClient(
         ModelConfig("claude-haiku-5-5", "low"),
         budget=Budget(2, 40, 0.10, 0),
         ledger=ledger,
         run_id="run-1",
         purpose="extract",
-        runner=runner,
+        transport=transport,
         cache_dir=tmp_path / "cache",
     )
 
@@ -165,17 +168,17 @@ def test_client_retries_invalid_output_caches_the_valid_one_and_records_every_pa
 def test_client_stops_without_retrying_when_claude_reports_an_error(tmp_path):
     calls = []
 
-    def runner(command, prompt):
+    def transport(config, system_prompt, json_schema, max_call_usd, prompt):
         calls.append(prompt)
         return fake_response(None, cost_usd=0.0, is_error=True)
 
-    client = ClaudeCodeClient(
+    client = LLMClient(
         ModelConfig("claude-haiku-5-5", "low"),
         budget=Budget(2, 40, 0.10, 0),
         ledger=Ledger(tmp_path / "ledger.jsonl"),
         run_id="run-1",
         purpose="extract",
-        runner=runner,
+        transport=transport,
         cache_dir=tmp_path / "cache",
     )
 
@@ -183,3 +186,111 @@ def test_client_stops_without_retrying_when_claude_reports_an_error(tmp_path):
         client.call("Gen.4.p1", "Be brief.", "Say OK.", Answer)
     assert len(calls) == 1
     assert json.loads((tmp_path / "ledger.jsonl").read_text())["is_error"] is True
+
+
+class FakeHTTPResponse:
+    def __init__(self, payload: dict) -> None:
+        self.body = json.dumps(payload).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, *args):
+        return self.body
+
+    def close(self):
+        pass
+
+
+def test_openai_compatible_transport_sends_the_schema_and_returns_a_claude_shaped_response(
+    monkeypatch,
+):
+    sent = []
+
+    def urlopen(request, timeout):
+        sent.append((request.full_url, request.headers, json.loads(request.data)))
+        return FakeHTTPResponse(
+            {
+                "choices": [{"message": {"content": '```json\n{"word": "OK"}\n```'}}],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 200},
+            }
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:11434/v1/")
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("KGRAG_PRICE_INPUT_PER_MTOK", "0.5")
+    monkeypatch.setenv("KGRAG_PRICE_OUTPUT_PER_MTOK", "2")
+
+    response = openai_compatible_transport(
+        ModelConfig("qwen3.5:4b", "medium"),
+        "Be brief.",
+        {"type": "object"},
+        0.1,
+        "Say OK.",
+    )
+
+    assert sent == [
+        (
+            "http://localhost:11434/v1/chat/completions",
+            {"Content-type": "application/json", "Authorization": "Bearer secret"},
+            {
+                "model": "qwen3.5:4b",
+                "messages": [
+                    {"role": "system", "content": "Be brief."},
+                    {"role": "user", "content": "Say OK."},
+                ],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "output",
+                        "schema": {"type": "object"},
+                        "strict": False,
+                    },
+                },
+            },
+        )
+    ]
+    assert {
+        key: response[key]
+        for key in ("is_error", "structured_output", "usage", "total_cost_usd")
+    } == {
+        "is_error": False,
+        "structured_output": {"word": "OK"},
+        "usage": {"input_tokens": 1000, "output_tokens": 200},
+        "total_cost_usd": pytest.approx(0.0009),
+    }
+
+
+def test_openai_compatible_transport_reports_http_errors_as_errors(monkeypatch):
+    import urllib.error
+
+    def urlopen(request, timeout):
+        raise urllib.error.HTTPError(
+            request.full_url,
+            401,
+            "Unauthorized",
+            {},
+            FakeHTTPResponse({"error": "bad key"}),
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+
+    response = openai_compatible_transport(
+        ModelConfig("gpt-4.1-mini", "medium"), "s", {}, 0.1, "p"
+    )
+
+    assert response == {"is_error": True, "result": 'HTTP 401: {"error": "bad key"}'}
+
+
+def test_default_transport_follows_the_provider_setting(monkeypatch):
+    monkeypatch.setenv("KGRAG_LLM_PROVIDER", "openai")
+    assert default_transport() is openai_compatible_transport
+    monkeypatch.setenv("KGRAG_LLM_PROVIDER", "claude-code")
+    assert default_transport() is claude_code_transport
+    monkeypatch.setenv("KGRAG_LLM_PROVIDER", "gemini")
+    with pytest.raises(LLMCallError, match="use one of claude-code, openai"):
+        default_transport()

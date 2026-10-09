@@ -1,12 +1,7 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { LlmClient, LlmUsage } from "@kgrag/retrieval";
+import { appendLedger, ledgerTotal } from "./ledger.ts";
 
-const LEDGER_PATH = fileURLToPath(
-	new URL("../../../data/ledger/llm_calls.jsonl", import.meta.url),
-);
 const CALL_TIMEOUT_MS = 180_000;
 
 export interface ClaudeCliOptions {
@@ -29,14 +24,6 @@ interface ClaudeResponse {
 		output_tokens?: number;
 		output_tokens_details?: { thinking_tokens?: number };
 	};
-}
-
-function ledgerTotal(): number {
-	if (!existsSync(LEDGER_PATH)) return 0;
-	return readFileSync(LEDGER_PATH, "utf-8")
-		.split("\n")
-		.filter(Boolean)
-		.reduce((sum, line) => sum + (JSON.parse(line).cost_usd ?? 0), 0);
 }
 
 function runClaude(args: string[], input: string): Promise<ClaudeResponse> {
@@ -72,7 +59,7 @@ function runClaude(args: string[], input: string): Promise<ClaudeResponse> {
 }
 
 // The same isolated `claude -p` call the Python pipeline makes, logged to the same
-// ledger and held to the same project budget, so `kgrag usage` sees agent spend too.
+// ledger and held to the same project budget.
 export class ClaudeCliClient implements LlmClient {
 	private readonly options: ClaudeCliOptions;
 
@@ -122,27 +109,23 @@ export class ClaudeCliClient implements LlmClient {
 			(usage.input_tokens ?? 0) +
 			(usage.cache_creation_input_tokens ?? 0) +
 			(usage.cache_read_input_tokens ?? 0);
-		mkdirSync(dirname(LEDGER_PATH), { recursive: true });
-		appendFileSync(
-			LEDGER_PATH,
-			`${JSON.stringify({
-				time: `${new Date().toISOString().slice(0, 19)}+00:00`,
-				run_id: `api-${new Date().toISOString().slice(0, 10)}`,
-				purpose: request.purpose,
-				model,
-				effort,
-				item_id: request.prompt.slice(0, 80),
-				attempt: 1,
-				is_error: Boolean(response.is_error),
-				input_tokens: usage.input_tokens ?? 0,
-				cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
-				cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
-				output_tokens: usage.output_tokens ?? 0,
-				thinking_tokens: usage.output_tokens_details?.thinking_tokens ?? 0,
-				cost_usd: response.total_cost_usd ?? 0,
-				duration_ms: response.duration_ms ?? 0,
-			})}\n`,
-		);
+		appendLedger({
+			time: `${new Date().toISOString().slice(0, 19)}+00:00`,
+			run_id: `api-${new Date().toISOString().slice(0, 10)}`,
+			purpose: request.purpose,
+			model,
+			effort,
+			item_id: request.prompt.slice(0, 80),
+			attempt: 1,
+			is_error: Boolean(response.is_error),
+			input_tokens: usage.input_tokens ?? 0,
+			cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
+			cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
+			output_tokens: usage.output_tokens ?? 0,
+			thinking_tokens: usage.output_tokens_details?.thinking_tokens ?? 0,
+			cost_usd: response.total_cost_usd ?? 0,
+			duration_ms: response.duration_ms ?? 0,
+		});
 		if (response.is_error)
 			throw new Error(String(response.result).slice(0, 300));
 		if (response.structured_output === undefined)

@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from kgrag.llm import ClaudeCodeClient
+from kgrag.llm import LLMClient
 from kgrag.resolve import KIN_RELATIONS, Cluster, Occurrence
 
 PROMPT_VERSION = "confirm_same_entity_v1"
@@ -71,7 +71,7 @@ def confirmation_prompt(
     )
 
 
-def llm_confirmer(client: ClaudeCodeClient, verse_text: dict[str, str]):
+def llm_confirmer(client: LLMClient, verse_text: dict[str, str]):
     system_prompt = load_prompt()
 
     def confirm(occurrence: Occurrence, cluster: Cluster) -> bool:

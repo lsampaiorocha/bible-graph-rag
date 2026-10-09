@@ -8,7 +8,6 @@ from pathlib import Path
 
 import typer
 import yaml
-from dotenv import load_dotenv
 
 from kgrag.build import (
     INDEX_DIR,
@@ -50,10 +49,11 @@ from kgrag.infer import infer_parent_links, llm_parent_confirmer
 from kgrag.kinship import PURPOSE as KINSHIP_PURPOSE
 from kgrag.kinship import llm_kinship_checker, relabel_loose_kinship
 from kgrag.llm import (
+    DEFAULT_MODEL,
     Budget,
     BudgetExceeded,
-    ClaudeCodeClient,
     Ledger,
+    LLMClient,
     ModelConfig,
     summarize_usage,
 )
@@ -74,7 +74,6 @@ app.add_typer(corpus_app, name="corpus")
 @app.callback()
 def main() -> None:
     """Bible Graph RAG batch pipeline."""
-    load_dotenv(REPO_ROOT / ".env")
 
 
 def load_alias_rules() -> AliasRules:
@@ -154,7 +153,8 @@ def extract(
         None, help="OSIS book code such as Gen, or Bible."
     ),
     model: str = typer.Option(
-        "claude-haiku-5-5", help="Full model id; aliases drift over time."
+        DEFAULT_MODEL,
+        help="Full model id; aliases drift over time. Default: KGRAG_MODEL in .env.",
     ),
     effort: str = typer.Option("medium", help="low, medium, high, xhigh or max."),
     run_budget_usd: float = typer.Option(
@@ -175,9 +175,7 @@ def extract(
     config = ModelConfig(model=model, effort=effort)
     ledger = Ledger()
     system_prompt = load_system_prompt()
-    probe = ClaudeCodeClient(
-        config, budget=None, ledger=ledger, run_id="", purpose=PURPOSE
-    )
+    probe = LLMClient(config, budget=None, ledger=ledger, run_id="", purpose=PURPOSE)
     to_call = [
         passage
         for passage in passages
@@ -220,7 +218,7 @@ def extract(
     except BudgetExceeded as error:
         raise typer.Exit(f"stopped: {error}") from error
     run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:6]}"
-    client = ClaudeCodeClient(
+    client = LLMClient(
         config, budget=budget, ledger=ledger, run_id=run_id, purpose=PURPOSE
     )
     summary = extract_passages(client, passages, extraction_dir(config), workers)
@@ -273,7 +271,7 @@ def usage() -> None:
 @app.command("build")
 def build_graph(
     scope: str = typer.Option("Gen", help="OSIS book code such as Gen, or Bible."),
-    model: str = typer.Option("claude-haiku-5-5"),
+    model: str = typer.Option(DEFAULT_MODEL),
     effort: str = typer.Option("medium"),
     resolver: str = typer.Option(
         "v1", help="naive (exact names) or v1 (rules plus LLM confirmation)."
@@ -305,7 +303,7 @@ def build_graph(
     elif resolver == "v1":
         ledger = Ledger()
         budget = Budget(run_budget_usd, project_budget_usd(), 0.10, ledger.total_cost())
-        client = ClaudeCodeClient(
+        client = LLMClient(
             ModelConfig(model=model, effort=effort),
             budget=budget,
             ledger=ledger,
@@ -335,7 +333,7 @@ def build_graph(
     entities, edges = build_index(extractions, resolution, verse_order, layout=False)
     if resolver == "v1":
         names = {entity["id"]: entity["name"] for entity in entities}
-        kinship_client = ClaudeCodeClient(
+        kinship_client = LLMClient(
             ModelConfig(model=model, effort=effort),
             budget=budget,
             ledger=ledger,
@@ -350,7 +348,7 @@ def build_graph(
         typer.echo(
             f"kinship words read loosely: {loose} of {len(kinship_decisions)} flagged"
         )
-        parent_client = ClaudeCodeClient(
+        parent_client = LLMClient(
             ModelConfig(model=model, effort=effort),
             budget=budget,
             ledger=ledger,

@@ -404,13 +404,13 @@
     "index": "gen-v1",
     "aligned_mentions": 2305,
     "bcubed_precision": 0.9704678131930101,
-    "bcubed_recall": 0.9931629413059198,
-    "bcubed_f1": 0.9816842250868496,
+    "bcubed_recall": 0.994822848879248,
+    "bcubed_f1": 0.9824944200857223,
     "merge_errors": 5,
     "split_errors": 0,
     "person_mention_f1": 0.9527464619812904,
     "place_mention_f1": 0.7463087248322148,
-    "gender_accuracy": 0.9516616314199395,
+    "gender_accuracy": 0.9515151515151515,
     "place_kind_accuracy": 0.7719298245614035,
     "hard_cases_passed": 6,
     "hard_cases": [
@@ -487,9 +487,9 @@
    },
    "links": {
     "FATHER_OF": {
-     "precision": 0.9704,
+     "precision": 0.974,
      "recall": 0.9129,
-     "f1": 0.9408,
+     "f1": 0.9424,
      "gold": 287
     },
     "MOTHER_OF": {
@@ -505,16 +505,16 @@
      "gold": 21
     },
     "SIBLING_OF": {
-     "precision": 0.9032,
+     "precision": 0.9333,
      "recall": 0.0456,
-     "f1": 0.0868,
+     "f1": 0.087,
      "gold": 614
     }
    },
    "siblings_with_shared_parents": {
-    "precision": 0.7802,
+    "precision": 0.795,
     "recall": 0.8844,
-    "f1": 0.829,
+    "f1": 0.8373,
     "gold": 614
    },
    "places": {
@@ -562,13 +562,13 @@
     "index": "gen-v1",
     "aligned_mentions": 2305,
     "bcubed_precision": 0.9704678131930101,
-    "bcubed_recall": 0.9931629413059198,
-    "bcubed_f1": 0.9816842250868496,
+    "bcubed_recall": 0.994822848879248,
+    "bcubed_f1": 0.9824944200857223,
     "merge_errors": 5,
     "split_errors": 0,
     "person_mention_f1": 0.9601160261058739,
     "place_mention_f1": 0.7463087248322148,
-    "gender_accuracy": 0.9516616314199395,
+    "gender_accuracy": 0.9515151515151515,
     "place_kind_accuracy": 0.7719298245614035,
     "hard_cases_passed": 6,
     "hard_cases": [
@@ -645,9 +645,9 @@
    },
    "links": {
     "FATHER_OF": {
-     "precision": 0.9741,
+     "precision": 0.9777,
      "recall": 0.9196,
-     "f1": 0.946,
+     "f1": 0.9477,
      "gold": 286
     },
     "MOTHER_OF": {
@@ -663,16 +663,16 @@
      "gold": 21
     },
     "SIBLING_OF": {
-     "precision": 0.9032,
+     "precision": 0.9333,
      "recall": 0.0456,
-     "f1": 0.0868,
+     "f1": 0.087,
      "gold": 614
     }
    },
    "siblings_with_shared_parents": {
-    "precision": 0.7802,
+    "precision": 0.795,
     "recall": 0.8844,
-    "f1": 0.829,
+    "f1": 0.8373,
     "gold": 614
    },
    "places": {

@@ -404,6 +404,7 @@ def fixture(
         extractions,
         INDEX_DIR / index_id / "er_audit.jsonl",
         INDEX_DIR / index_id / "parent_audit.jsonl",
+        INDEX_DIR / index_id / "kinship_audit.jsonl",
         records,
     )
     typer.echo(f"fixture written to {FIXTURE_DIR}")

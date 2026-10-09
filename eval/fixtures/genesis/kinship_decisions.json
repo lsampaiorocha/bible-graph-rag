@@ -1,0 +1,22 @@
+{
+ "rel_13d8ad39c676": {
+  "reason": "Gen.28.5 names Laban as \"son of Bethuel the Syrian\" and Gen.24.47 and Gen.22.23 make Bethuel Nahor's son, so Nahor is Laban's grandfather and Gen.29.5's \"Laban the son of Nahor\" uses \"son\" for a descendant; no verse lists Laban among Nahor's children beside Bethuel, so the two-people exception does not apply.",
+  "verdict": "loose"
+ },
+ "rel_3e1dc8c9e7d8": {
+  "reason": "Gen.36.20 lists Anah among Seir's sons right beside Zibeon, while Gen.36.24 makes Anah a son of Zibeon, so the verses describe two different people named Anah.",
+  "verdict": "literal"
+ },
+ "rel_5e2922d38fc0": {
+  "reason": "Gen.24.29, Gen.25.20 and Gen.28.5 call Laban Rebekah's brother, and Gen.28.5 names Laban as son of Bethuel, the same father Gen.22.23 and Gen.24.24 give Rebekah, so the sibling link is literal and the flag's premise that Bethuel is Laban's sibling is the error.",
+  "verdict": "literal"
+ },
+ "rel_7bb3d4b2229f": {
+  "reason": "Gen.11.26-27 says Terah begat Abram, Nahor and Haran, and that Haran begat Lot, so Lot is Abram's nephew, and Gen.14.14 and 14.16 call him \"brother\" in the loose sense of a kinsman.",
+  "verdict": "loose"
+ },
+ "rel_e700351b27f0": {
+  "reason": "Gen.36.21 lists Dishon among \"the children of Seir,\" while Gen.36.25 lists a different Dishon as a child of Anah, and Anah is himself one of Seir's sons in Gen.36.20, so the verses describe two people named Dishon rather than a grandson.",
+  "verdict": "literal"
+ }
+}

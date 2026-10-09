@@ -7,6 +7,7 @@ import yaml
 from kgrag.build import build_index
 from kgrag.corpus import REPO_ROOT, read_jsonl
 from kgrag.infer import ParentCandidate, ParentConfirmer, infer_parent_links
+from kgrag.kinship import KinshipChecker, KinshipFlag, relabel_loose_kinship
 from kgrag.resolve import AliasRules, Cluster, Confirmer, Occurrence, resolve_v1
 from kgrag_eval.report import build_report
 from kgrag_eval.theographic import gold_from_records, in_scope, parse_md_mentions
@@ -53,6 +54,14 @@ def replay_parent_confirmer(decisions: dict[str, dict]) -> ParentConfirmer:
     return confirm
 
 
+def replay_kinship_checker(decisions: dict[str, dict]) -> KinshipChecker:
+    def check(flag: KinshipFlag) -> tuple[str, str]:
+        decision = decisions.get(flag.edge_id, {"verdict": "unsure", "reason": ""})
+        return decision["verdict"], decision["reason"]
+
+    return check
+
+
 def write_json_gz(path: Path, value: object) -> None:
     path.write_bytes(
         gzip.compress(json.dumps(value, sort_keys=True).encode("utf-8"), mtime=0)
@@ -67,6 +76,7 @@ def make_fixture(
     extractions: list[dict],
     audit_path: Path,
     parent_audit_path: Path,
+    kinship_audit_path: Path,
     records: dict[str, dict[str, dict]],
 ) -> None:
     verses = {
@@ -150,6 +160,13 @@ def make_fixture(
         }
         for row in read_jsonl(parent_audit_path)
     }
+    kinship_decisions = {
+        row["edge_id"]: {"verdict": row["verdict"], "reason": row["reason"]}
+        for row in read_jsonl(kinship_audit_path)
+    }
+    (FIXTURE_DIR / "kinship_decisions.json").write_text(
+        json.dumps(kinship_decisions, indent=1, sort_keys=True), encoding="utf-8"
+    )
     (FIXTURE_DIR / "parent_decisions.json").write_text(
         json.dumps(parent_decisions, indent=1, sort_keys=True), encoding="utf-8"
     )
@@ -177,6 +194,10 @@ def run_fixture() -> dict:
         extractions, verse_order, replay_confirmer(decisions), AliasRules()
     )
     entities, edges = build_index(extractions, resolution, verse_order, layout=False)
+    kinship_decisions = json.loads(
+        (FIXTURE_DIR / "kinship_decisions.json").read_text(encoding="utf-8")
+    )
+    edges, _ = relabel_loose_kinship(edges, replay_kinship_checker(kinship_decisions))
     parent_decisions = json.loads(
         (FIXTURE_DIR / "parent_decisions.json").read_text(encoding="utf-8")
     )

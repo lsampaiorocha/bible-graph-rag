@@ -1,5 +1,5 @@
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -188,11 +188,22 @@ class NameClasses:
         return {self.find(name) for name in names}
 
 
+def generation_apart(
+    first: set[str], second: set[str], parents_of: Callable[[str], set[str]]
+) -> bool:
+    # "Son of" also means grandson: Laban is "the son of Nahor" in Gen 29:5 and the son
+    # of Bethuel, Nahor's son, in Gen 24, so those two fathers are not two Labans.
+    return any(parents_of(name) & second for name in first) or any(
+        parents_of(name) & first for name in second
+    )
+
+
 def compare(
     occurrence: Occurrence,
     cluster: Cluster,
     rules: AliasRules,
     canonical: Callable[[set[str]], set[str]],
+    parents_of: Callable[[str], set[str]] = lambda name: set(),
 ) -> tuple[str, str]:
     refs = occurrence.refs()
     cluster_refs = set().union(*(other.refs() for other in cluster.occurrences))
@@ -227,6 +238,7 @@ def compare(
             kin[parent]
             and cluster_kin[parent]
             and not kin[parent] & cluster_kin[parent]
+            and not generation_apart(kin[parent], cluster_kin[parent], parents_of)
         ):
             return "cannot", f"different {parent[:-1]}"
     shared = [
@@ -252,6 +264,24 @@ def resolve_v1(
     clusters: list[Cluster] = []
     decisions: list[Decision] = []
     person_names = NameClasses()
+    named_parents: dict[str, set[str]] = defaultdict(set)
+    for occurrence in occurrences:
+        if occurrence.kind == "person":
+            for name in occurrence.names:
+                named_parents[name] |= (
+                    occurrence.kin["fathers"] | occurrence.kin["mothers"]
+                )
+
+    def parents_of(canonical_name: str) -> set[str]:
+        return person_names.canonical(
+            {
+                parent
+                for name, parents in named_parents.items()
+                if person_names.find(name) == canonical_name
+                for parent in parents
+            }
+        )
+
     for occurrence in occurrences:
         if occurrence.kind == "person":
             person_names.union(occurrence.names)
@@ -261,7 +291,12 @@ def resolve_v1(
             if c.kind == occurrence.kind and c.names & occurrence.names
         ]
         verdicts = [
-            (cluster, *compare(occurrence, cluster, rules, person_names.canonical))
+            (
+                cluster,
+                *compare(
+                    occurrence, cluster, rules, person_names.canonical, parents_of
+                ),
+            )
             for cluster in candidates
         ]
         musts = [

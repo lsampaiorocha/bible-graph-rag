@@ -8,13 +8,13 @@
    "index": "genesis-fixture",
    "aligned_mentions": 2305,
    "bcubed_precision": 0.9693109079146298,
-   "bcubed_recall": 0.9917746549718632,
-   "bcubed_f1": 0.9804141231273114,
+   "bcubed_recall": 0.9934345625451917,
+   "bcubed_f1": 0.9812244860754754,
    "merge_errors": 6,
    "split_errors": 1,
    "person_mention_f1": 0.951786999280403,
    "place_mention_f1": 0.7463087248322148,
-   "gender_accuracy": 0.9516616314199395,
+   "gender_accuracy": 0.9515151515151515,
    "place_kind_accuracy": 0.7719298245614035,
    "hard_cases_passed": 6,
    "hard_cases": [
@@ -124,16 +124,16 @@
     "gold": 21
    },
    "SIBLING_OF": {
-    "precision": 0.9032,
+    "precision": 0.9333,
     "recall": 0.0456,
-    "f1": 0.0868,
+    "f1": 0.087,
     "gold": 614
    }
   },
   "siblings_with_shared_parents": {
-   "precision": 0.7927,
+   "precision": 0.7939,
    "recall": 0.8844,
-   "f1": 0.836,
+   "f1": 0.8367,
    "gold": 614
   },
   "places": {
@@ -181,13 +181,13 @@
    "index": "genesis-fixture",
    "aligned_mentions": 2305,
    "bcubed_precision": 0.9693109079146298,
-   "bcubed_recall": 0.9917746549718632,
-   "bcubed_f1": 0.9804141231273114,
+   "bcubed_recall": 0.9934345625451917,
+   "bcubed_f1": 0.9812244860754754,
    "merge_errors": 6,
    "split_errors": 1,
    "person_mention_f1": 0.9591491418902587,
    "place_mention_f1": 0.7463087248322148,
-   "gender_accuracy": 0.9516616314199395,
+   "gender_accuracy": 0.9515151515151515,
    "place_kind_accuracy": 0.7719298245614035,
    "hard_cases_passed": 6,
    "hard_cases": [
@@ -297,16 +297,16 @@
     "gold": 21
    },
    "SIBLING_OF": {
-    "precision": 0.9032,
+    "precision": 0.9333,
     "recall": 0.0456,
-    "f1": 0.0868,
+    "f1": 0.087,
     "gold": 614
    }
   },
   "siblings_with_shared_parents": {
-   "precision": 0.7927,
+   "precision": 0.7939,
    "recall": 0.8844,
-   "f1": 0.836,
+   "f1": 0.8367,
    "gold": 614
   },
   "places": {

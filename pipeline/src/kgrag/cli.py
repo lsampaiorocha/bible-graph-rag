@@ -42,6 +42,8 @@ from kgrag.extract import (
 )
 from kgrag.infer import PURPOSE as PARENT_PURPOSE
 from kgrag.infer import infer_parent_links, llm_parent_confirmer
+from kgrag.kinship import PURPOSE as KINSHIP_PURPOSE
+from kgrag.kinship import llm_kinship_checker, relabel_loose_kinship
 from kgrag.llm import (
     Budget,
     BudgetExceeded,
@@ -327,6 +329,22 @@ def build_graph(
         raise typer.BadParameter(f"unknown resolver {resolver!r}; use naive or v1")
     entities, edges = build_index(extractions, resolution, verse_order, layout=False)
     if resolver == "v1":
+        names = {entity["id"]: entity["name"] for entity in entities}
+        kinship_client = ClaudeCodeClient(
+            ModelConfig(model=model, effort=effort),
+            budget=budget,
+            ledger=ledger,
+            run_id=client.run_id,
+            purpose=KINSHIP_PURPOSE,
+        )
+        edges, kinship_decisions = relabel_loose_kinship(
+            edges, llm_kinship_checker(kinship_client, names, verse_text)
+        )
+        write_jsonl(out_dir / "kinship_audit.jsonl", kinship_decisions)
+        loose = sum(decision["verdict"] == "loose" for decision in kinship_decisions)
+        typer.echo(
+            f"kinship words read loosely: {loose} of {len(kinship_decisions)} flagged"
+        )
         parent_client = ClaudeCodeClient(
             ModelConfig(model=model, effort=effort),
             budget=budget,
@@ -338,11 +356,7 @@ def build_graph(
             entities,
             edges,
             verse_order,
-            llm_parent_confirmer(
-                parent_client,
-                {entity["id"]: entity["name"] for entity in entities},
-                verse_text,
-            ),
+            llm_parent_confirmer(parent_client, names, verse_text),
         )
         edges = sorted(edges + added, key=lambda edge: edge["id"])
         write_jsonl(out_dir / "parent_audit.jsonl", parent_decisions)

@@ -2,10 +2,9 @@
  "Gen.26.p3|person|Esau": true,
  "Gen.28.p1|person|Bethuel": true,
  "Gen.28.p1|person|Nebajoth": true,
+ "Gen.29.p1|person|Laban": true,
  "Gen.29.p1|person|Nahor": true,
- "Gen.30.p2|person|Laban": true,
  "Gen.31.p4|person|Nahor": true,
- "Gen.32.p1|person|Laban": true,
  "Gen.34.p1|person|Jacob": true,
  "Gen.36.p1|person|Adah": false,
  "Gen.36.p1|person|Elon": true,
@@ -19,6 +18,5 @@
  "Gen.46.p1|person|Pharez": true,
  "Gen.46.p1|person|Zohar": false,
  "Gen.46.p2|person|Elon": false,
- "Gen.46.p2|person|Laban": true,
  "Gen.50.p2|person|Manasseh": true
 }

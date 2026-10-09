@@ -39,10 +39,6 @@
   "confirmed": true,
   "reason": "Gen.4.25 says \"Adam knew his wife again; and she bare a son, and called his name Seth,\" and Gen.3.20 names Adam's wife as Eve (\"Adam called his wife's name Eve\"), so the verses make Eve Seth's mother."
  },
- "MOTHER_OF|per_milcah|per_laban_gen_29_5": {
-  "confirmed": false,
-  "reason": "Gen 22:20 and 22:23 say Milcah bore children to Nahor, and Gen 29:5 calls Laban Nahor's son, but no given verse names Laban among Milcah's children, the eight named in 22:23 are not listed in the provided text, and Gen 22:24 (not provided) mentions a concubine, Reumah, who also bore Nahor sons."
- },
  "MOTHER_OF|per_shuah_gen_38_2|per_zerah_gen_46_12": {
   "confirmed": false,
   "reason": "Gen.46.12 names Zerah only as a son of Judah, and Gen.38.2 and 38.12 show Judah's wife Shuah but never say she bore Zerah or any other child, so the given verses neither state the link nor point to a different mother."

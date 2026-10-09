@@ -65,6 +65,9 @@ VERSE_ORDER = {
             "Gen.12.5",
             "Gen.17.5",
             "Gen.17.15",
+            "Gen.22.23",
+            "Gen.28.5",
+            "Gen.29.5",
             "Gen.36.2",
             "Gen.36.4",
         ]
@@ -221,4 +224,42 @@ def test_relatives_are_compared_by_identity_so_a_renamed_father_is_not_a_differe
         mapping[("Gen.16.p2", "person", "Ishmael")]
         == mapping[("Gen.17.p2", "person", "Ishmael")]
         == "per_ishmael"
+    )
+
+
+def test_a_father_one_generation_up_asks_the_confirmer_instead_of_splitting_the_person():
+    extractions = [
+        extraction(
+            "Gen.22.p2",
+            [person("Nahor", ["Gen.22.23"]), person("Bethuel", ["Gen.22.23"])],
+            [father_of("Nahor", "Bethuel", "Gen.22.23")],
+        ),
+        extraction(
+            "Gen.28.p1",
+            [person("Bethuel", ["Gen.28.5"]), person("Laban", ["Gen.28.5"])],
+            [father_of("Bethuel", "Laban", "Gen.28.5")],
+        ),
+        extraction(
+            "Gen.29.p1",
+            [person("Nahor", ["Gen.29.5"]), person("Laban", ["Gen.29.5"])],
+            [father_of("Nahor", "Laban", "Gen.29.5")],
+        ),
+    ]
+    asked = []
+
+    def confirm(occurrence, cluster):
+        asked.append(occurrence.key)
+        return True
+
+    mapping, _ = resolve_v1(extractions, VERSE_ORDER, confirm)
+
+    assert asked == [
+        ("Gen.28.p1", "person", "Bethuel"),
+        ("Gen.29.p1", "person", "Laban"),
+        ("Gen.29.p1", "person", "Nahor"),
+    ]
+    assert (
+        mapping[("Gen.28.p1", "person", "Laban")]
+        == mapping[("Gen.29.p1", "person", "Laban")]
+        == "per_laban"
     )

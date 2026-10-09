@@ -1,0 +1,720 @@
+[
+ {
+  "index": "gen-naive",
+  "scope": "Gen",
+  "corrected_verses": 61,
+  "dangling_key_links": 17,
+  "raw": {
+   "entities": {
+    "index": "gen-naive",
+    "aligned_mentions": 2305,
+    "bcubed_precision": 0.9594415292816937,
+    "bcubed_recall": 0.9478948424204485,
+    "bcubed_f1": 0.9536332350213564,
+    "merge_errors": 7,
+    "split_errors": 3,
+    "person_mention_f1": 0.9412329095706405,
+    "place_mention_f1": 0.748993288590604,
+    "gender_accuracy": 0.9523809523809523,
+    "place_kind_accuracy": 0.7580645161290323,
+    "hard_cases_passed": 2,
+    "hard_cases": [
+     {
+      "case": "keep lamech_1808 and lamech_1809 apart",
+      "passed": false,
+      "detail": "per_lamech / per_lamech"
+     },
+     {
+      "case": "keep enoch_1191 and enoch_1192 apart",
+      "passed": false,
+      "detail": "per_enoch / per_enoch"
+     },
+     {
+      "case": "keep nahor_2142 and nahor_2143 apart",
+      "passed": true,
+      "detail": "per_nahor_son_of_serug / per_nahor"
+     },
+     {
+      "case": "merge all names of abraham_58",
+      "passed": false,
+      "detail": "per_abraham 119, per_abram 45"
+     },
+     {
+      "case": "merge all names of sarah_2473",
+      "passed": false,
+      "detail": "per_sarah 31, per_sarai 12"
+     },
+     {
+      "case": "merge all names of israel_682",
+      "passed": true,
+      "detail": "per_jacob 170, per_israel 8"
+     }
+    ],
+    "merge_error_examples": [
+     {
+      "entity": "per_adah",
+      "gold": {
+       "adah_414": 5,
+       "adah_69": 3
+      }
+     },
+     {
+      "entity": "per_lamech",
+      "gold": {
+       "lamech_1808": 4,
+       "lamech_1809": 4
+      }
+     },
+     {
+      "entity": "per_anah",
+      "gold": {
+       "anah_247": 3,
+       "anah_248": 3,
+       "anah_249": 1
+      }
+     },
+     {
+      "entity": "per_enoch",
+      "gold": {
+       "enoch_1192": 5,
+       "enoch_1191": 2
+      }
+     },
+     {
+      "entity": "pla_zoar",
+      "gold": {
+       "zoar_1271": 4,
+       "bela_172": 2
+      }
+     },
+     {
+      "entity": "per_zibeon",
+      "gold": {
+       "zibeon_3062": 3,
+       "zibeon_3061": 2
+      }
+     },
+     {
+      "entity": "pla_bethlehem",
+      "gold": {
+       "ephrath_403": 3,
+       "bethlehem_218": 2
+      }
+     }
+    ],
+    "split_error_examples": [
+     {
+      "gold": "abraham_58",
+      "entities": {
+       "per_abraham": 119,
+       "per_abram": 45
+      }
+     },
+     {
+      "gold": "sarah_2473",
+      "entities": {
+       "per_sarah": 31,
+       "per_sarai": 12
+      }
+     },
+     {
+      "gold": "nahor_2143",
+      "entities": {
+       "per_nahor": 7,
+       "per_nahor_son_of_terah": 3
+      }
+     }
+    ]
+   },
+   "links": {
+    "FATHER_OF": {
+     "precision": 0.8914,
+     "recall": 0.8293,
+     "f1": 0.8592,
+     "gold": 287
+    },
+    "MOTHER_OF": {
+     "precision": 0.8,
+     "recall": 0.8,
+     "f1": 0.8,
+     "gold": 60
+    },
+    "SPOUSE_OF": {
+     "precision": 0.85,
+     "recall": 0.8095,
+     "f1": 0.8293,
+     "gold": 21
+    },
+    "SIBLING_OF": {
+     "precision": 0.9032,
+     "recall": 0.0456,
+     "f1": 0.0868,
+     "gold": 614
+    }
+   },
+   "siblings_with_shared_parents": {
+    "precision": 0.6891,
+    "recall": 0.7687,
+    "f1": 0.7267,
+    "gold": 614
+   },
+   "places": {
+    "BORN_IN": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "gold": 12
+    },
+    "DIED_IN": {
+     "precision": 0.4286,
+     "recall": 0.375,
+     "f1": 0.4,
+     "gold": 8
+    }
+   },
+   "events": {
+    "recall": 0.5345,
+    "matched": 62,
+    "gold": 116,
+    "by_size": {
+     "1-3 verses": {
+      "matched": 40,
+      "gold": 79
+     },
+     "4-10 verses": {
+      "matched": 17,
+      "gold": 18
+     },
+     "over 10 verses": {
+      "matched": 5,
+      "gold": 19
+     }
+    },
+    "participants": {
+     "precision": 0.7643,
+     "recall": 0.8231,
+     "f1": 0.7926,
+     "gold": 130
+    }
+   }
+  },
+  "corrected": {
+   "entities": {
+    "index": "gen-naive",
+    "aligned_mentions": 2305,
+    "bcubed_precision": 0.9594415292816937,
+    "bcubed_recall": 0.9478948424204485,
+    "bcubed_f1": 0.9536332350213564,
+    "merge_errors": 7,
+    "split_errors": 3,
+    "person_mention_f1": 0.9485134155184917,
+    "place_mention_f1": 0.748993288590604,
+    "gender_accuracy": 0.9523809523809523,
+    "place_kind_accuracy": 0.7580645161290323,
+    "hard_cases_passed": 2,
+    "hard_cases": [
+     {
+      "case": "keep lamech_1808 and lamech_1809 apart",
+      "passed": false,
+      "detail": "per_lamech / per_lamech"
+     },
+     {
+      "case": "keep enoch_1191 and enoch_1192 apart",
+      "passed": false,
+      "detail": "per_enoch / per_enoch"
+     },
+     {
+      "case": "keep nahor_2142 and nahor_2143 apart",
+      "passed": true,
+      "detail": "per_nahor_son_of_serug / per_nahor"
+     },
+     {
+      "case": "merge all names of abraham_58",
+      "passed": false,
+      "detail": "per_abraham 119, per_abram 45"
+     },
+     {
+      "case": "merge all names of sarah_2473",
+      "passed": false,
+      "detail": "per_sarah 31, per_sarai 12"
+     },
+     {
+      "case": "merge all names of israel_682",
+      "passed": true,
+      "detail": "per_jacob 170, per_israel 8"
+     }
+    ],
+    "merge_error_examples": [
+     {
+      "entity": "per_adah",
+      "gold": {
+       "adah_414": 5,
+       "adah_69": 3
+      }
+     },
+     {
+      "entity": "per_lamech",
+      "gold": {
+       "lamech_1808": 4,
+       "lamech_1809": 4
+      }
+     },
+     {
+      "entity": "per_anah",
+      "gold": {
+       "anah_247": 3,
+       "anah_248": 3,
+       "anah_249": 1
+      }
+     },
+     {
+      "entity": "per_enoch",
+      "gold": {
+       "enoch_1192": 5,
+       "enoch_1191": 2
+      }
+     },
+     {
+      "entity": "pla_zoar",
+      "gold": {
+       "zoar_1271": 4,
+       "bela_172": 2
+      }
+     },
+     {
+      "entity": "per_zibeon",
+      "gold": {
+       "zibeon_3062": 3,
+       "zibeon_3061": 2
+      }
+     },
+     {
+      "entity": "pla_bethlehem",
+      "gold": {
+       "ephrath_403": 3,
+       "bethlehem_218": 2
+      }
+     }
+    ],
+    "split_error_examples": [
+     {
+      "gold": "abraham_58",
+      "entities": {
+       "per_abraham": 119,
+       "per_abram": 45
+      }
+     },
+     {
+      "gold": "sarah_2473",
+      "entities": {
+       "per_sarah": 31,
+       "per_sarai": 12
+      }
+     },
+     {
+      "gold": "nahor_2143",
+      "entities": {
+       "per_nahor": 7,
+       "per_nahor_son_of_terah": 3
+      }
+     }
+    ]
+   },
+   "links": {
+    "FATHER_OF": {
+     "precision": 0.8951,
+     "recall": 0.8357,
+     "f1": 0.8644,
+     "gold": 286
+    },
+    "MOTHER_OF": {
+     "precision": 0.8,
+     "recall": 0.8,
+     "f1": 0.8,
+     "gold": 60
+    },
+    "SPOUSE_OF": {
+     "precision": 0.85,
+     "recall": 0.8095,
+     "f1": 0.8293,
+     "gold": 21
+    },
+    "SIBLING_OF": {
+     "precision": 0.9032,
+     "recall": 0.0456,
+     "f1": 0.0868,
+     "gold": 614
+    }
+   },
+   "siblings_with_shared_parents": {
+    "precision": 0.6891,
+    "recall": 0.7687,
+    "f1": 0.7267,
+    "gold": 614
+   },
+   "places": {
+    "BORN_IN": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "gold": 12
+    },
+    "DIED_IN": {
+     "precision": 0.4286,
+     "recall": 0.375,
+     "f1": 0.4,
+     "gold": 8
+    }
+   },
+   "events": {
+    "recall": 0.5345,
+    "matched": 62,
+    "gold": 116,
+    "by_size": {
+     "1-3 verses": {
+      "matched": 40,
+      "gold": 79
+     },
+     "4-10 verses": {
+      "matched": 17,
+      "gold": 18
+     },
+     "over 10 verses": {
+      "matched": 5,
+      "gold": 19
+     }
+    },
+    "participants": {
+     "precision": 0.7643,
+     "recall": 0.8231,
+     "f1": 0.7926,
+     "gold": 130
+    }
+   }
+  },
+  "narrative": null
+ },
+ {
+  "index": "gen-v1",
+  "scope": "Gen",
+  "corrected_verses": 61,
+  "dangling_key_links": 17,
+  "raw": {
+   "entities": {
+    "index": "gen-v1",
+    "aligned_mentions": 2305,
+    "bcubed_precision": 0.9704678131930101,
+    "bcubed_recall": 0.994822848879248,
+    "bcubed_f1": 0.9824944200857223,
+    "merge_errors": 5,
+    "split_errors": 0,
+    "person_mention_f1": 0.9527464619812904,
+    "place_mention_f1": 0.7463087248322148,
+    "gender_accuracy": 0.9515151515151515,
+    "place_kind_accuracy": 0.7719298245614035,
+    "hard_cases_passed": 6,
+    "hard_cases": [
+     {
+      "case": "keep lamech_1808 and lamech_1809 apart",
+      "passed": true,
+      "detail": "per_lamech_gen_4_18 / per_lamech_gen_5_25"
+     },
+     {
+      "case": "keep enoch_1191 and enoch_1192 apart",
+      "passed": true,
+      "detail": "per_enoch_gen_4_17 / per_enoch_gen_5_18"
+     },
+     {
+      "case": "keep nahor_2142 and nahor_2143 apart",
+      "passed": true,
+      "detail": "per_nahor_son_of_serug / per_nahor"
+     },
+     {
+      "case": "merge all names of abraham_58",
+      "passed": true,
+      "detail": "per_abraham 164"
+     },
+     {
+      "case": "merge all names of sarah_2473",
+      "passed": true,
+      "detail": "per_sarah 43"
+     },
+     {
+      "case": "merge all names of israel_682",
+      "passed": true,
+      "detail": "per_jacob 178"
+     }
+    ],
+    "merge_error_examples": [
+     {
+      "entity": "pla_bethel",
+      "gold": {
+       "bethel_202": 9,
+       "luz_737": 3
+      }
+     },
+     {
+      "entity": "pla_hebron",
+      "gold": {
+       "hebron_551": 4,
+       "kiriath-arba_697": 2,
+       "vale_of_hebron_1206": 1
+      }
+     },
+     {
+      "entity": "pla_zoar",
+      "gold": {
+       "zoar_1271": 4,
+       "bela_172": 2
+      }
+     },
+     {
+      "entity": "per_zibeon",
+      "gold": {
+       "zibeon_3062": 3,
+       "zibeon_3061": 2
+      }
+     },
+     {
+      "entity": "pla_bethlehem",
+      "gold": {
+       "ephrath_403": 3,
+       "bethlehem_218": 2
+      }
+     }
+    ],
+    "split_error_examples": []
+   },
+   "links": {
+    "FATHER_OF": {
+     "precision": 0.974,
+     "recall": 0.9129,
+     "f1": 0.9424,
+     "gold": 287
+    },
+    "MOTHER_OF": {
+     "precision": 0.8361,
+     "recall": 0.85,
+     "f1": 0.843,
+     "gold": 60
+    },
+    "SPOUSE_OF": {
+     "precision": 0.9474,
+     "recall": 0.8571,
+     "f1": 0.9,
+     "gold": 21
+    },
+    "SIBLING_OF": {
+     "precision": 0.9333,
+     "recall": 0.0456,
+     "f1": 0.087,
+     "gold": 614
+    }
+   },
+   "siblings_with_shared_parents": {
+    "precision": 0.795,
+    "recall": 0.8844,
+    "f1": 0.8373,
+    "gold": 614
+   },
+   "places": {
+    "BORN_IN": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "gold": 12
+    },
+    "DIED_IN": {
+     "precision": 0.4286,
+     "recall": 0.375,
+     "f1": 0.4,
+     "gold": 8
+    }
+   },
+   "events": {
+    "recall": 0.5345,
+    "matched": 62,
+    "gold": 116,
+    "by_size": {
+     "1-3 verses": {
+      "matched": 40,
+      "gold": 79
+     },
+     "4-10 verses": {
+      "matched": 17,
+      "gold": 18
+     },
+     "over 10 verses": {
+      "matched": 5,
+      "gold": 19
+     }
+    },
+    "participants": {
+     "precision": 0.7857,
+     "recall": 0.8462,
+     "f1": 0.8148,
+     "gold": 130
+    }
+   }
+  },
+  "corrected": {
+   "entities": {
+    "index": "gen-v1",
+    "aligned_mentions": 2305,
+    "bcubed_precision": 0.9704678131930101,
+    "bcubed_recall": 0.994822848879248,
+    "bcubed_f1": 0.9824944200857223,
+    "merge_errors": 5,
+    "split_errors": 0,
+    "person_mention_f1": 0.9601160261058739,
+    "place_mention_f1": 0.7463087248322148,
+    "gender_accuracy": 0.9515151515151515,
+    "place_kind_accuracy": 0.7719298245614035,
+    "hard_cases_passed": 6,
+    "hard_cases": [
+     {
+      "case": "keep lamech_1808 and lamech_1809 apart",
+      "passed": true,
+      "detail": "per_lamech_gen_4_18 / per_lamech_gen_5_25"
+     },
+     {
+      "case": "keep enoch_1191 and enoch_1192 apart",
+      "passed": true,
+      "detail": "per_enoch_gen_4_17 / per_enoch_gen_5_18"
+     },
+     {
+      "case": "keep nahor_2142 and nahor_2143 apart",
+      "passed": true,
+      "detail": "per_nahor_son_of_serug / per_nahor"
+     },
+     {
+      "case": "merge all names of abraham_58",
+      "passed": true,
+      "detail": "per_abraham 164"
+     },
+     {
+      "case": "merge all names of sarah_2473",
+      "passed": true,
+      "detail": "per_sarah 43"
+     },
+     {
+      "case": "merge all names of israel_682",
+      "passed": true,
+      "detail": "per_jacob 178"
+     }
+    ],
+    "merge_error_examples": [
+     {
+      "entity": "pla_bethel",
+      "gold": {
+       "bethel_202": 9,
+       "luz_737": 3
+      }
+     },
+     {
+      "entity": "pla_hebron",
+      "gold": {
+       "hebron_551": 4,
+       "kiriath-arba_697": 2,
+       "vale_of_hebron_1206": 1
+      }
+     },
+     {
+      "entity": "pla_zoar",
+      "gold": {
+       "zoar_1271": 4,
+       "bela_172": 2
+      }
+     },
+     {
+      "entity": "per_zibeon",
+      "gold": {
+       "zibeon_3062": 3,
+       "zibeon_3061": 2
+      }
+     },
+     {
+      "entity": "pla_bethlehem",
+      "gold": {
+       "ephrath_403": 3,
+       "bethlehem_218": 2
+      }
+     }
+    ],
+    "split_error_examples": []
+   },
+   "links": {
+    "FATHER_OF": {
+     "precision": 0.9777,
+     "recall": 0.9196,
+     "f1": 0.9477,
+     "gold": 286
+    },
+    "MOTHER_OF": {
+     "precision": 0.8361,
+     "recall": 0.85,
+     "f1": 0.843,
+     "gold": 60
+    },
+    "SPOUSE_OF": {
+     "precision": 0.9474,
+     "recall": 0.8571,
+     "f1": 0.9,
+     "gold": 21
+    },
+    "SIBLING_OF": {
+     "precision": 0.9333,
+     "recall": 0.0456,
+     "f1": 0.087,
+     "gold": 614
+    }
+   },
+   "siblings_with_shared_parents": {
+    "precision": 0.795,
+    "recall": 0.8844,
+    "f1": 0.8373,
+    "gold": 614
+   },
+   "places": {
+    "BORN_IN": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "gold": 12
+    },
+    "DIED_IN": {
+     "precision": 0.4286,
+     "recall": 0.375,
+     "f1": 0.4,
+     "gold": 8
+    }
+   },
+   "events": {
+    "recall": 0.5345,
+    "matched": 62,
+    "gold": 116,
+    "by_size": {
+     "1-3 verses": {
+      "matched": 40,
+      "gold": 79
+     },
+     "4-10 verses": {
+      "matched": 17,
+      "gold": 18
+     },
+     "over 10 verses": {
+      "matched": 5,
+      "gold": 19
+     }
+    },
+    "participants": {
+     "precision": 0.7857,
+     "recall": 0.8462,
+     "f1": 0.8148,
+     "gold": 130
+    }
+   }
+  },
+  "narrative": null
+ }
+]

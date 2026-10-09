@@ -23,7 +23,7 @@ type PanelTab = "answer" | "details" | "trace";
 export function App() {
 	const [graph, setGraph] = useState<GraphData | null>(null);
 	const [trace, setTrace] = useState<RetrievalTrace | null>(null);
-	const [question, setQuestion] = useState(EXAMPLE_QUESTIONS[0] ?? "");
+	const [question, setQuestion] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [mode, setMode] = useState<ViewMode>("focused");

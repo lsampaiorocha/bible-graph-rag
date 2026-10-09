@@ -179,14 +179,12 @@ export async function runAgent(
 		}
 	}
 	const seeds = await findSeeds(source, question);
+	// Whole-book questions go straight to the overview: the planner kept adding explore
+	// calls ("Genesis" matched to Noah) that cluttered the story map.
+	const wholeBook = OVERVIEW_WORDS.test(question.toLowerCase());
 	// A question that names nobody ("Who built the ark?") starts from the entities
-	// nearest to it in meaning, except a whole-book question, where that only lures the
-	// planner away ("the events of Genesis" lands near Noah).
-	if (
-		seeds.length === 0 &&
-		questionVector &&
-		!OVERVIEW_WORDS.test(question.toLowerCase())
-	) {
+	// nearest to it in meaning.
+	if (seeds.length === 0 && questionVector && !wholeBook) {
 		for (const hit of await source.seedsByVector(questionVector, 3)) {
 			if (hit.score >= MEANING_MATCH_MIN) {
 				seeds.push({
@@ -228,7 +226,11 @@ export async function runAgent(
 
 	const subgraph: Subgraph = { nodes: new Map(), edges: new Map() };
 	const steps: TraceStep[] = [];
-	for (let round = 0; round < 2 && steps.length < MAX_TOOL_CALLS; round++) {
+	for (
+		let round = 0;
+		!wholeBook && round < 2 && steps.length < MAX_TOOL_CALLS;
+		round++
+	) {
 		// A second round runs only when the first left something unresolved.
 		if (round === 1 && !steps.some((step) => step.note)) break;
 		const roundStarted = performance.now();

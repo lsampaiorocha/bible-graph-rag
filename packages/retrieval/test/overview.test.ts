@@ -138,10 +138,35 @@ describe("questions that name nobody", () => {
 		);
 	});
 
-	it("except whole-book questions, where a near entity only lures the planner away", async () => {
-		expect(
-			await plannerPrompt("What are the most important events of Genesis?"),
-		).toContain("No entity names were recognized in the question.");
+	it("except whole-book questions, which go straight to the overview without the planner", async () => {
+		const purposes: string[] = [];
+		const llm: LlmClient = {
+			async complete<T>(request: { purpose: string }) {
+				purposes.push(request.purpose);
+				return {
+					output: {
+						sentences: [{ text: "The flood.", cites: ["E1"] }],
+						insufficient_context: false,
+					} as T,
+					usage: {
+						model: "fake-model",
+						input_tokens: 10,
+						output_tokens: 5,
+						cost_usd: 0.001,
+					},
+				};
+			},
+		};
+
+		const trace = await runAgent(
+			source(),
+			"What are the most important events of Genesis?",
+			llm,
+			async () => [1, 0],
+		);
+
+		expect(trace.steps?.map((step) => step.tool)).toEqual(["overview"]);
+		expect(purposes).toEqual(["agent_answer"]);
 	});
 });
 

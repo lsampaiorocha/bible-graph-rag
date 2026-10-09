@@ -393,6 +393,13 @@ export function GraphView({
 			candidate: "#d6dbe2",
 			unreached: "rgba(15,23,42,0.05)",
 		})[linkStatusOf(link)];
+	const tiers = { used: 0, sent: 0, found: 0 };
+	for (const node of focused?.nodes ?? []) {
+		const status = statusOf(node);
+		if (status === "cited") tiers.used += 1;
+		else if (status === "context") tiers.sent += 1;
+		else if (status === "candidate") tiers.found += 1;
+	}
 	const radiusOf = (node: GraphNode) => {
 		if (isSeed(node)) return 9;
 		const status = statusOf(node);
@@ -411,120 +418,203 @@ export function GraphView({
 	};
 
 	return (
-		<div ref={ref} className="relative h-full w-full">
+		<div className="flex h-full w-full flex-col">
+			<div ref={ref} className="min-h-0 flex-1">
+				{width > 0 && (
+					<ForceGraph2D<VizNode, VizLink>
+						ref={graphRef}
+						width={width}
+						height={height}
+						graphData={graphData}
+						cooldownTicks={mode === "whole" ? 0 : 200}
+						dagMode={dagMode}
+						dagLevelDistance={55}
+						onDagError={() => undefined}
+						d3VelocityDecay={0.35}
+						onEngineStop={() => {
+							if (mode === "focused" && needsFit.current) {
+								needsFit.current = false;
+								graphRef.current?.zoomToFit(500, 60);
+								setTimeout(() => {
+									const target = Math.max(
+										graphRef.current?.zoom() ?? 1,
+										MIN_LABEL_SCALE,
+									);
+									if (
+										labelPasses.current < 2 &&
+										Math.abs(target - labelScale.current) / labelScale.current >
+											0.12
+									) {
+										labelPasses.current += 1;
+										labelScale.current = target;
+										setCollide(labelScale.current);
+										needsFit.current = true;
+										graphRef.current?.d3ReheatSimulation();
+									}
+								}, 550);
+							}
+						}}
+						nodeLabel={(node) =>
+							`<b>${escapeHtml(node.label)}</b> · ${node.kind}<br/>${describeStatus(node)}`
+						}
+						nodeCanvasObject={(node, context, scale) => {
+							const status = statusOf(node);
+							// Circles stop growing past 1.5x zoom so small graphs do not show giant dots.
+							const radius = radiusOf(node) * Math.min(1, 1.5 / scale);
+							const x = node.x ?? 0;
+							const y = node.y ?? 0;
+							context.globalAlpha = dimmed(status) ? 0.35 : 1;
+							context.beginPath();
+							context.arc(x, y, radius, 0, 2 * Math.PI);
+							context.fillStyle =
+								status === "candidate"
+									? CANDIDATE_COLOR
+									: status === "unreached"
+										? UNREACHED_COLOR
+										: (KIND_COLORS[node.kind] ?? "#6b7280");
+							context.fill();
+							if (isSeed(node) || node.id === selectedId) {
+								context.lineWidth = 2.5 / scale;
+								context.strokeStyle =
+									node.id === selectedId ? "#f43f5e" : "#111827";
+								context.stroke();
+							}
+							// The whole graph names only its hubs until you zoom in.
+							if (
+								shown(status) &&
+								(mode !== "whole" || node.hub || scale > 3)
+							) {
+								const label = shortLabel(node.label);
+								const fontSize = 12 / scale;
+								context.font = `${isSeed(node) || status === "cited" ? "600 " : ""}${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+								context.textAlign = "center";
+								context.textBaseline = "top";
+								context.lineWidth = 3 / scale;
+								context.strokeStyle = "white";
+								context.strokeText(label, x, y + radius + 2 / scale);
+								context.fillStyle = "#111827";
+								context.fillText(label, x, y + radius + 2 / scale);
+							}
+							context.globalAlpha = 1;
+						}}
+						nodePointerAreaPaint={(node, color, context, scale) => {
+							context.beginPath();
+							context.arc(
+								node.x ?? 0,
+								node.y ?? 0,
+								radiusOf(node) * Math.min(1, 1.5 / scale) + 3,
+								0,
+								2 * Math.PI,
+							);
+							context.fillStyle = color;
+							context.fill();
+						}}
+						linkColor={linkColorOf}
+						linkWidth={(link) =>
+							({ cited: 2.2, context: 1.6, candidate: 0.6, unreached: 0.6 })[
+								linkStatusOf(link)
+							]
+						}
+						linkLineDash={(link) => LINK_DASH[link.type] ?? null}
+						linkDirectionalArrowLength={(link) =>
+							LINK_DASH[link.type] ? 0 : 5
+						}
+						linkDirectionalArrowRelPos={1}
+						linkDirectionalArrowColor={linkColorOf}
+						nodeRelSize={6}
+						linkLabel={(link) =>
+							`${escapeHtml(labelById.get(link.fromId) ?? link.fromId)} —${link.type}→ ${escapeHtml(labelById.get(link.toId) ?? link.toId)}`
+						}
+						onNodeClick={(node) => onSelect(String(node.id))}
+						onBackgroundClick={() => onSelect(null)}
+					/>
+				)}
+			</div>
 			{mode === "focused" && trace && (
-				<div className="pointer-events-none absolute bottom-3 left-3 z-10 flex gap-3 rounded bg-white/85 px-2 py-1 text-[11px] text-gray-600">
-					<span>
-						bright = used in the answer, faded = retrieved but not used
-					</span>
-					<span>→ parent to child, or who/what to which</span>
-					<span>╌ married</span>
-					<span>┈ siblings</span>
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-700">
+					<div className="font-semibold text-gray-900">
+						How to read this graph
+					</div>
+					{hasAnswer && (
+						<div className="flex items-center gap-2">
+							<svg width="14" height="14" aria-hidden="true">
+								<circle cx="7" cy="7" r="5" fill="#2563eb" />
+							</svg>
+							<span>
+								<b>Used in the answer</b>, cited or named · {tiers.used}
+							</span>
+						</div>
+					)}
+					<div className="flex items-center gap-2">
+						<svg width="14" height="14" aria-hidden="true">
+							<circle
+								cx="7"
+								cy="7"
+								r="5"
+								fill="#2563eb"
+								opacity={hasAnswer ? 0.35 : 1}
+							/>
+						</svg>
+						<span>
+							{hasAnswer ? "Sent to the model, not used" : "Sent to the model"}{" "}
+							· {tiers.sent}
+						</span>
+					</div>
+					<div className="flex items-center gap-2">
+						<svg width="14" height="14" aria-hidden="true">
+							<circle cx="7" cy="7" r="3" fill={CANDIDATE_COLOR} />
+						</svg>
+						<span>
+							Found, not sent (cut by ranking or limits) · {tiers.found}
+						</span>
+					</div>
+					<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-gray-600">
+						<span className="flex items-center gap-1">
+							<svg width="26" height="10" aria-hidden="true">
+								<line
+									x1="1"
+									y1="5"
+									x2="19"
+									y2="5"
+									stroke="#1d4ed8"
+									strokeWidth="1.6"
+								/>
+								<path d="M19 1.5 L25 5 L19 8.5 Z" fill="#1d4ed8" />
+							</svg>
+							parent to child, who or what to which
+						</span>
+						<span className="flex items-center gap-1">
+							<svg width="22" height="10" aria-hidden="true">
+								<line
+									x1="1"
+									y1="5"
+									x2="21"
+									y2="5"
+									stroke="#1d4ed8"
+									strokeWidth="1.6"
+									strokeDasharray="6 4"
+								/>
+							</svg>
+							married
+						</span>
+						<span className="flex items-center gap-1">
+							<svg width="22" height="10" aria-hidden="true">
+								<line
+									x1="1"
+									y1="5"
+									x2="21"
+									y2="5"
+									stroke="#1d4ed8"
+									strokeWidth="1.6"
+									strokeDasharray="1.5 3"
+									strokeLinecap="round"
+								/>
+							</svg>
+							siblings
+						</span>
+						<span>colour = kind, see the top bar</span>
+					</div>
 				</div>
-			)}
-			{width > 0 && (
-				<ForceGraph2D<VizNode, VizLink>
-					ref={graphRef}
-					width={width}
-					height={height}
-					graphData={graphData}
-					cooldownTicks={mode === "whole" ? 0 : 200}
-					dagMode={dagMode}
-					dagLevelDistance={55}
-					onDagError={() => undefined}
-					d3VelocityDecay={0.35}
-					onEngineStop={() => {
-						if (mode === "focused" && needsFit.current) {
-							needsFit.current = false;
-							graphRef.current?.zoomToFit(500, 60);
-							setTimeout(() => {
-								const target = Math.max(
-									graphRef.current?.zoom() ?? 1,
-									MIN_LABEL_SCALE,
-								);
-								if (
-									labelPasses.current < 2 &&
-									Math.abs(target - labelScale.current) / labelScale.current >
-										0.12
-								) {
-									labelPasses.current += 1;
-									labelScale.current = target;
-									setCollide(labelScale.current);
-									needsFit.current = true;
-									graphRef.current?.d3ReheatSimulation();
-								}
-							}, 550);
-						}
-					}}
-					nodeLabel={(node) =>
-						`<b>${escapeHtml(node.label)}</b> · ${node.kind}<br/>${describeStatus(node)}`
-					}
-					nodeCanvasObject={(node, context, scale) => {
-						const status = statusOf(node);
-						// Circles stop growing past 1.5x zoom so small graphs do not show giant dots.
-						const radius = radiusOf(node) * Math.min(1, 1.5 / scale);
-						const x = node.x ?? 0;
-						const y = node.y ?? 0;
-						context.globalAlpha = dimmed(status) ? 0.35 : 1;
-						context.beginPath();
-						context.arc(x, y, radius, 0, 2 * Math.PI);
-						context.fillStyle =
-							status === "candidate"
-								? CANDIDATE_COLOR
-								: status === "unreached"
-									? UNREACHED_COLOR
-									: (KIND_COLORS[node.kind] ?? "#6b7280");
-						context.fill();
-						if (isSeed(node) || node.id === selectedId) {
-							context.lineWidth = 2.5 / scale;
-							context.strokeStyle =
-								node.id === selectedId ? "#f43f5e" : "#111827";
-							context.stroke();
-						}
-						// The whole graph names only its hubs until you zoom in.
-						if (shown(status) && (mode !== "whole" || node.hub || scale > 3)) {
-							const label = shortLabel(node.label);
-							const fontSize = 12 / scale;
-							context.font = `${isSeed(node) || status === "cited" ? "600 " : ""}${fontSize}px ui-sans-serif, system-ui, sans-serif`;
-							context.textAlign = "center";
-							context.textBaseline = "top";
-							context.lineWidth = 3 / scale;
-							context.strokeStyle = "white";
-							context.strokeText(label, x, y + radius + 2 / scale);
-							context.fillStyle = "#111827";
-							context.fillText(label, x, y + radius + 2 / scale);
-						}
-						context.globalAlpha = 1;
-					}}
-					nodePointerAreaPaint={(node, color, context, scale) => {
-						context.beginPath();
-						context.arc(
-							node.x ?? 0,
-							node.y ?? 0,
-							radiusOf(node) * Math.min(1, 1.5 / scale) + 3,
-							0,
-							2 * Math.PI,
-						);
-						context.fillStyle = color;
-						context.fill();
-					}}
-					linkColor={linkColorOf}
-					linkWidth={(link) =>
-						({ cited: 2.2, context: 1.6, candidate: 0.6, unreached: 0.6 })[
-							linkStatusOf(link)
-						]
-					}
-					linkLineDash={(link) => LINK_DASH[link.type] ?? null}
-					linkDirectionalArrowLength={(link) => (LINK_DASH[link.type] ? 0 : 5)}
-					linkDirectionalArrowRelPos={1}
-					linkDirectionalArrowColor={linkColorOf}
-					nodeRelSize={6}
-					linkLabel={(link) =>
-						`${escapeHtml(labelById.get(link.fromId) ?? link.fromId)} —${link.type}→ ${escapeHtml(labelById.get(link.toId) ?? link.toId)}`
-					}
-					onNodeClick={(node) => onSelect(String(node.id))}
-					onBackgroundClick={() => onSelect(null)}
-				/>
 			)}
 		</div>
 	);

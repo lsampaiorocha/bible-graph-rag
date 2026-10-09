@@ -215,3 +215,44 @@ describe("links among retrieved people", () => {
 		]);
 	});
 });
+
+describe("relatives", () => {
+	it("return children with each child's other parent, so you see by whom", async () => {
+		const graph = new MemoryGraphSource({
+			indexId: "test-index",
+			entities: [
+				entity("per_jacob", "Jacob", "person"),
+				entity("per_leah", "Leah", "person"),
+				entity("per_reuben", "Reuben", "person"),
+			],
+			edges: [
+				link("r_father", "FATHER_OF", "per_jacob", "per_reuben"),
+				link("r_mother", "MOTHER_OF", "per_leah", "per_reuben"),
+			],
+			aliases: [],
+		});
+
+		expect(await graph.relatives("per_jacob", "children")).toEqual([
+			{
+				edgeId: "r_father",
+				type: "FATHER_OF",
+				source: "per_jacob",
+				target: "per_reuben",
+				sourceLabel: "Jacob",
+				targetLabel: "Reuben",
+				supportCount: 1,
+				depth: 1,
+			},
+			{
+				edgeId: "r_mother",
+				type: "MOTHER_OF",
+				source: "per_leah",
+				target: "per_reuben",
+				sourceLabel: "Leah",
+				targetLabel: "Reuben",
+				supportCount: 1,
+				depth: 2,
+			},
+		]);
+	});
+});

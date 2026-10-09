@@ -222,6 +222,17 @@ export class Neo4jGraphSource implements GraphSource {
 				 ${LINK_RETURN}, 2 AS depth`,
 			);
 		}
+		if (
+			relation === "children" ||
+			relation === "sons" ||
+			relation === "daughters"
+		) {
+			queries.push(
+				`MATCH (:Person {id: $personId})-[:FATHER_OF|MOTHER_OF]->(r:Person)<-[e:FATHER_OF|MOTHER_OF]-(other:Person)
+				 WHERE other.id <> $personId AND ($gender IS NULL OR r.gender = $gender)
+				 ${LINK_RETURN}, 2 AS depth`,
+			);
+		}
 		const rows = (
 			await Promise.all(
 				queries.map((query) => this.rows<LinkRow>(query, { personId, gender })),

@@ -119,6 +119,7 @@ export interface GraphSource {
 	): Promise<LinkRow[]>;
 	// Direct family links of one kind; siblings also come through a shared parent,
 	// returned as that parent's two links (depth 1 to the person, 2 to the sibling).
+	// Children come with each child's other parent (depth 2), so you see by whom.
 	relatives(personId: string, relation: Relation): Promise<LinkRow[]>;
 	// The book's main characters ("person") or the leading event of each story cluster
 	// ("event"), in rank order, as ranked when the graph was built.
@@ -357,6 +358,21 @@ export class MemoryGraphSource implements GraphSource {
 					[edge.source, edge.target].includes(personId))
 			) {
 				depthByEdge.set(edge.id, 1);
+			}
+		}
+		if (["children", "sons", "daughters"].includes(relation)) {
+			const children = new Set(
+				this.graph.edges
+					.filter((edge) => depthByEdge.has(edge.id))
+					.map((edge) => edge.target),
+			);
+			for (const edge of this.graph.edges) {
+				if (
+					PARENT_TYPES.has(edge.type) &&
+					children.has(edge.target) &&
+					edge.source !== personId
+				)
+					depthByEdge.set(edge.id, 2);
 			}
 		}
 		if (["siblings", "brothers", "sisters"].includes(relation)) {

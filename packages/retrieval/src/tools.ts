@@ -334,11 +334,18 @@ async function overviewStep(
 	const kind = /event|stor|happen/i.test(call.entity) ? "event" : "person";
 	const cards = await source.overview(kind);
 	const ids = cards.map((card) => card.id);
-	// Main characters come with the links among them; main events with their participants.
+	// Main characters come with the links among them. Main events come with the main
+	// characters who took part, which keeps the view to a readable story map.
+	const mainCharacters =
+		kind === "event"
+			? new Set((await source.overview("person")).map((card) => card.id))
+			: null;
 	const rows =
 		kind === "person"
 			? await source.corridor(ids, 0, null)
-			: await source.corridor(ids, 1, ["PARTICIPATED_IN"]);
+			: (await source.corridor(ids, 1, ["PARTICIPATED_IN"])).filter((row) =>
+					mainCharacters?.has(row.source),
+				);
 	cards.forEach((card, rank) => {
 		into.nodes.set(card.id, {
 			id: card.id,

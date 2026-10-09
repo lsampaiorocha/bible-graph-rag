@@ -73,7 +73,7 @@ describe("overview tool", () => {
 		expect([...subgraph.nodes.keys()]).toEqual(["per_jacob", "per_joseph"]);
 	});
 
-	it("returns the ranked story events with their participants", async () => {
+	it("returns the ranked story events with the main characters who took part", async () => {
 		const subgraph: Subgraph = { nodes: new Map(), edges: new Map() };
 
 		const step = await executeCall(
@@ -83,13 +83,8 @@ describe("overview tool", () => {
 			subgraph,
 		);
 
-		expect(step.node_ids).toEqual([
-			"evt_flood",
-			"evt_sold",
-			"per_joseph",
-			"per_noah",
-		]);
-		expect(step.edge_ids).toEqual(["r3", "r4"]);
+		expect(step.node_ids).toEqual(["evt_flood", "evt_sold", "per_joseph"]);
+		expect(step.edge_ids).toEqual(["r4"]);
 	});
 
 	it("is what the keyword planner picks for main-character and main-event questions", () => {

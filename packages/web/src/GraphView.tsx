@@ -39,6 +39,7 @@ interface VizNode {
 	seed: boolean;
 	parentId?: string;
 	status?: VizStatus;
+	hub?: boolean;
 }
 
 interface VizLink {
@@ -144,8 +145,21 @@ function buildFocusedGraph(
 	};
 }
 
+const WHOLE_GRAPH_LABELS = 30;
+const RADIAL_TREE_NODES = 40;
+// The tightest zoom the label spacing adapts to; past it a wide tree would only keep
+// widening, as more spacing makes the fit zoom out further.
+const MIN_LABEL_SCALE = 0.5;
+
 function buildWholeGraph(data: GraphData) {
+	const hubs = new Set(
+		[...data.nodes]
+			.sort((a, b) => b.mentionCount - a.mentionCount)
+			.slice(0, WHOLE_GRAPH_LABELS)
+			.map((node) => node.id),
+	);
 	const nodes: GraphNode[] = data.nodes.map((node) => ({
+		hub: hubs.has(node.id),
 		id: node.id,
 		label: node.label,
 		kind: node.kind,
@@ -323,12 +337,16 @@ export function GraphView({
 			? trace.steps[0]?.tool
 			: undefined;
 	// A family line reads as a tree: ancestors stack upwards, descendants downwards.
+	// A wide descendant tree fits far better as rings around the ancestor than as rows.
 	const dagMode =
-		mode === "focused"
-			? ({ ancestors: "bu", descendants: "td" } as const)[
-					lineage as "ancestors" | "descendants"
-				]
-			: undefined;
+		mode !== "focused"
+			? undefined
+			: lineage === "descendants" &&
+					(focused?.nodes.length ?? 0) > RADIAL_TREE_NODES
+				? "radialout"
+				: ({ ancestors: "bu", descendants: "td" } as const)[
+						lineage as "ancestors" | "descendants"
+					];
 	const shown = (status: VizStatus) =>
 		status === "cited" || status === "context";
 	// Once an answer exists, what it cites stays bright and what was only retrieved dims.
@@ -377,15 +395,18 @@ export function GraphView({
 							needsFit.current = false;
 							graphRef.current?.zoomToFit(500, 60);
 							setTimeout(() => {
-								const scale = graphRef.current?.zoom() ?? 1;
+								const target = Math.max(
+									graphRef.current?.zoom() ?? 1,
+									MIN_LABEL_SCALE,
+								);
 								if (
 									labelPasses.current < 2 &&
-									Math.abs(scale - labelScale.current) / labelScale.current >
+									Math.abs(target - labelScale.current) / labelScale.current >
 										0.12
 								) {
 									labelPasses.current += 1;
-									labelScale.current = scale;
-									setCollide(scale);
+									labelScale.current = target;
+									setCollide(labelScale.current);
 									needsFit.current = true;
 									graphRef.current?.d3ReheatSimulation();
 								}
@@ -417,7 +438,8 @@ export function GraphView({
 								node.id === selectedId ? "#f43f5e" : "#111827";
 							context.stroke();
 						}
-						if (shown(status)) {
+						// The whole graph names only its hubs until you zoom in.
+						if (shown(status) && (mode !== "whole" || node.hub || scale > 3)) {
 							const label = shortLabel(node.label);
 							const fontSize = 12 / scale;
 							context.font = `${isSeed(node) || status === "cited" ? "600 " : ""}${fontSize}px ui-sans-serif, system-ui, sans-serif`;

@@ -137,6 +137,17 @@ function buildFocusedGraph(
 }
 
 const WHOLE_GRAPH_LABELS = 30;
+const KIND_PLURALS: [string, string][] = [
+	["person", "people"],
+	["place", "places"],
+	["group", "groups"],
+	["event", "events"],
+];
+// Index ids start with the scope they were built from (gen-v1 is Genesis).
+const SCOPE_NAMES: Record<string, string> = {
+	gen: "Genesis",
+	bible: "the Bible",
+};
 // Two-way family ties get a line style instead of an arrow; every other link points
 // from its source to its target (parent to child, person to event, event to place).
 const LINK_DASH: Record<string, number[]> = {
@@ -393,6 +404,31 @@ export function GraphView({
 			candidate: "#d6dbe2",
 			unreached: "rgba(15,23,42,0.05)",
 		})[linkStatusOf(link)];
+	const describeKinds = (kinds: string[]) =>
+		KIND_PLURALS.map(
+			([kind, plural]) =>
+				[kind, plural, kinds.filter((k) => k === kind).length] as const,
+		)
+			.filter(([, , count]) => count > 0)
+			.map(
+				([kind, plural, count]) =>
+					`${count.toLocaleString()} ${count === 1 ? kind : plural}`,
+			)
+			.join(", ");
+	const scopeName =
+		SCOPE_NAMES[data.indexId.split("-")[0] ?? ""] ?? data.indexId;
+	const wholeCaption = {
+		kinds: describeKinds(data.nodes.map((node) => node.kind)),
+		clusters: new Set(data.nodes.map((node) => node.community)).size,
+	};
+	const focusedCaption =
+		mode === "focused" && trace && focused
+			? {
+					entities: focused.nodes.length,
+					kinds: describeKinds(focused.nodes.map((node) => node.kind)),
+					links: focused.links.length,
+				}
+			: null;
 	const tiers = { used: 0, sent: 0, found: 0 };
 	for (const node of focused?.nodes ?? []) {
 		const status = statusOf(node);
@@ -419,6 +455,119 @@ export function GraphView({
 
 	return (
 		<div className="flex h-full w-full flex-col">
+			<div className="grid gap-1.5 border-b border-gray-200 bg-white px-4 py-3 text-[13px] text-gray-700">
+				{focusedCaption ? (
+					<>
+						<div className="text-[15px] font-semibold text-gray-900">
+							“{trace?.query.text}”
+						</div>
+						<div>
+							{focusedCaption.entities} entities ({focusedCaption.kinds}) and{" "}
+							{focusedCaption.links} relationships retrieved from the{" "}
+							{scopeName} graph of {data.nodes.length.toLocaleString()} entities
+						</div>
+					</>
+				) : (
+					<>
+						<div className="text-[15px] font-semibold text-gray-900">
+							Knowledge graph of {scopeName} (KJV)
+						</div>
+						<div>
+							{data.nodes.length.toLocaleString()} entities (
+							{wholeCaption.kinds}) · {data.edges.length.toLocaleString()}{" "}
+							relationships · {wholeCaption.clusters} story clusters · names
+							shown for the {WHOLE_GRAPH_LABELS} most mentioned, zoom in for
+							more
+						</div>
+					</>
+				)}
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+					{KIND_PLURALS.map(([kind]) => (
+						<span key={kind} className="flex items-center gap-1.5">
+							<svg width="12" height="12" aria-hidden="true">
+								<circle cx="6" cy="6" r="5" fill={KIND_COLORS[kind]} />
+							</svg>
+							{kind}
+						</span>
+					))}
+					{focusedCaption && (
+						<>
+							{hasAnswer && (
+								<span className="flex items-center gap-1.5">
+									<svg width="14" height="14" aria-hidden="true">
+										<circle cx="7" cy="7" r="6" fill="#2563eb" />
+									</svg>
+									<b>used in the answer</b> · {tiers.used}
+								</span>
+							)}
+							<span className="flex items-center gap-1.5">
+								<svg width="14" height="14" aria-hidden="true">
+									<circle
+										cx="7"
+										cy="7"
+										r="6"
+										fill="#2563eb"
+										opacity={hasAnswer ? 0.35 : 1}
+									/>
+								</svg>
+								{hasAnswer
+									? "sent to the model, not used"
+									: "sent to the model"}{" "}
+								· {tiers.sent}
+							</span>
+							<span className="flex items-center gap-1.5">
+								<svg width="14" height="14" aria-hidden="true">
+									<circle cx="7" cy="7" r="3.5" fill={CANDIDATE_COLOR} />
+								</svg>
+								found, not sent · {tiers.found}
+							</span>
+						</>
+					)}
+					<span className="flex items-center gap-1.5">
+						<svg width="30" height="12" aria-hidden="true">
+							<line
+								x1="1"
+								y1="6"
+								x2="22"
+								y2="6"
+								stroke="#1d4ed8"
+								strokeWidth="1.8"
+							/>
+							<path d="M22 2 L29 6 L22 10 Z" fill="#1d4ed8" />
+						</svg>
+						parent to child
+					</span>
+					<span className="flex items-center gap-1.5">
+						<svg width="26" height="12" aria-hidden="true">
+							<line
+								x1="1"
+								y1="6"
+								x2="25"
+								y2="6"
+								stroke="#1d4ed8"
+								strokeWidth="1.8"
+								strokeDasharray="6 4"
+							/>
+						</svg>
+						married
+					</span>
+					<span className="flex items-center gap-1.5">
+						<svg width="26" height="12" aria-hidden="true">
+							<line
+								x1="1"
+								y1="6"
+								x2="25"
+								y2="6"
+								stroke="#1d4ed8"
+								strokeWidth="1.8"
+								strokeDasharray="1.5 3"
+								strokeLinecap="round"
+							/>
+						</svg>
+						siblings
+					</span>
+				</div>
+			</div>
 			<div ref={ref} className="min-h-0 flex-1">
 				{width > 0 && (
 					<ForceGraph2D<VizNode, VizLink>
@@ -530,92 +679,6 @@ export function GraphView({
 					/>
 				)}
 			</div>
-			{mode === "focused" && trace && (
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-700">
-					<div className="font-semibold text-gray-900">
-						How to read this graph
-					</div>
-					{hasAnswer && (
-						<div className="flex items-center gap-2">
-							<svg width="14" height="14" aria-hidden="true">
-								<circle cx="7" cy="7" r="5" fill="#2563eb" />
-							</svg>
-							<span>
-								<b>Used in the answer</b>, cited or named · {tiers.used}
-							</span>
-						</div>
-					)}
-					<div className="flex items-center gap-2">
-						<svg width="14" height="14" aria-hidden="true">
-							<circle
-								cx="7"
-								cy="7"
-								r="5"
-								fill="#2563eb"
-								opacity={hasAnswer ? 0.35 : 1}
-							/>
-						</svg>
-						<span>
-							{hasAnswer ? "Sent to the model, not used" : "Sent to the model"}{" "}
-							· {tiers.sent}
-						</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<svg width="14" height="14" aria-hidden="true">
-							<circle cx="7" cy="7" r="3" fill={CANDIDATE_COLOR} />
-						</svg>
-						<span>
-							Found, not sent (cut by ranking or limits) · {tiers.found}
-						</span>
-					</div>
-					<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-gray-600">
-						<span className="flex items-center gap-1">
-							<svg width="26" height="10" aria-hidden="true">
-								<line
-									x1="1"
-									y1="5"
-									x2="19"
-									y2="5"
-									stroke="#1d4ed8"
-									strokeWidth="1.6"
-								/>
-								<path d="M19 1.5 L25 5 L19 8.5 Z" fill="#1d4ed8" />
-							</svg>
-							parent to child, who or what to which
-						</span>
-						<span className="flex items-center gap-1">
-							<svg width="22" height="10" aria-hidden="true">
-								<line
-									x1="1"
-									y1="5"
-									x2="21"
-									y2="5"
-									stroke="#1d4ed8"
-									strokeWidth="1.6"
-									strokeDasharray="6 4"
-								/>
-							</svg>
-							married
-						</span>
-						<span className="flex items-center gap-1">
-							<svg width="22" height="10" aria-hidden="true">
-								<line
-									x1="1"
-									y1="5"
-									x2="21"
-									y2="5"
-									stroke="#1d4ed8"
-									strokeWidth="1.6"
-									strokeDasharray="1.5 3"
-									strokeLinecap="round"
-								/>
-							</svg>
-							siblings
-						</span>
-						<span>colour = kind, see the top bar</span>
-					</div>
-				</div>
-			)}
 		</div>
 	);
 }

@@ -91,7 +91,8 @@ export const RELATIONS = [
 	"sisters",
 ] as const;
 export type Relation = (typeof RELATIONS)[number];
-export const MAX_LINEAGE_DEPTH = 12;
+// Genesis runs about 24 generations from Adam to Jacob's grandsons.
+export const MAX_LINEAGE_DEPTH = 30;
 export const MAX_LINEAGE_LINKS = 200;
 
 // Two implementations exist: Neo4j for the local API and in-memory JSON for the

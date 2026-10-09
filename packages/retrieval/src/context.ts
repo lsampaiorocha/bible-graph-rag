@@ -1,9 +1,15 @@
-import { compareText, type GraphSource } from "./graphSource.ts";
+import {
+	compareText,
+	type GraphSource,
+	MAX_LINEAGE_LINKS,
+} from "./graphSource.ts";
 import type { Answer, TraceChunk, TraceEdge, TraceNode } from "./trace.ts";
 
-export const MAX_CONTEXT_NODES = 40;
-export const MAX_CONTEXT_EDGES = 60;
-export const MAX_CONTEXT_VERSES = 30;
+// Room for a whole family tree, which is the answer to a lineage question;
+// each explore result is already cut to its top 25 before it gets here.
+export const MAX_CONTEXT_NODES = 150;
+export const MAX_CONTEXT_EDGES = MAX_LINEAGE_LINKS;
+export const MAX_CONTEXT_VERSES = 80;
 
 export interface AnswerContext {
 	text: string;

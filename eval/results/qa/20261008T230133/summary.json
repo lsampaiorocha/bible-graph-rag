@@ -1,7 +1,7 @@
 {
  "run": "20261008T230133",
  "judge": "claude-sonnet-5-5 medium",
- "judge_cost_usd": 0.1813,
+ "judge_cost_usd": 0.0918,
  "questions": 35,
  "modes": {
   "agent": {
@@ -22,16 +22,16 @@
    "verse_recall": 0.8167,
    "cited_verse_recall": 0.7989,
    "invalid_citation_rate": 0.0,
-   "mean_input_tokens": 6247,
-   "mean_latency_s": 11.78,
-   "cost_usd": 0.0547,
+   "mean_input_tokens": 6830,
+   "mean_latency_s": 10.64,
+   "cost_usd": 0.0465,
    "failed": 0,
-   "grounded_rate": 0.7763,
-   "answer_name_recall": 0.7329,
-   "tree_people_recall": 0.7194,
-   "tree_people_precision": 0.9938,
-   "tree_link_recall": 0.7653,
-   "tree_link_precision": 0.9879
+   "grounded_rate": 0.9467,
+   "answer_name_recall": 0.7699,
+   "tree_people_recall": 0.898,
+   "tree_people_precision": 0.9877,
+   "tree_link_recall": 0.8956,
+   "tree_link_precision": 0.9825
   },
   "closed_book": {
    "accuracy": 0.9143,
@@ -84,7 +84,7 @@
    "mean_latency_s": 7.64,
    "cost_usd": 0.0478,
    "failed": 0,
-   "grounded_rate": 0.971,
+   "grounded_rate": 0.9783,
    "answer_name_recall": 0.644,
    "tree_people_recall": null,
    "tree_people_precision": null,

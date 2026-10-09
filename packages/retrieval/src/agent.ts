@@ -105,6 +105,7 @@ Rules:
 - Prefer the most specific tool: a family question goes to ancestors, descendants or relatives, not explore.
 - When several entities share a name, pick the id whose description fits the question.
 - Set relation only for relatives and generations only for ancestors or descendants; otherwise null.
+- Leave generations null to get every generation; set a number only when the question limits it (children = 1, grandchildren = 2).
 - If a previous round is shown, use it to fix what failed (an ambiguous name, nothing found); do not repeat a call that worked.`;
 
 export const ANSWER_SYSTEM = `You answer a question about the King James Bible using only the context given: entities [E…], relationships [R…] and verses [C…]. Do not add facts from memory.

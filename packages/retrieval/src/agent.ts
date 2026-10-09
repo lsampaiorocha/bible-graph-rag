@@ -11,6 +11,7 @@ import {
 	executeCall,
 	MAX_TOOL_CALLS,
 	MEANING_MATCH_MIN,
+	OVERVIEW_WORDS,
 	planByKeywords,
 	TOOLS,
 	type ToolCall,
@@ -176,9 +177,14 @@ export async function runAgent(
 		}
 	}
 	const seeds = await findSeeds(source, question);
-	if (seeds.length === 0 && questionVector) {
-		// A question that names nobody ("Who built the ark?") starts from the entities
-		// nearest to it in meaning.
+	// A question that names nobody ("Who built the ark?") starts from the entities
+	// nearest to it in meaning, except a whole-book question, where that only lures the
+	// planner away ("the events of Genesis" lands near Noah).
+	if (
+		seeds.length === 0 &&
+		questionVector &&
+		!OVERVIEW_WORDS.test(question.toLowerCase())
+	) {
 		for (const hit of await source.seedsByVector(questionVector, 3)) {
 			if (hit.score >= MEANING_MATCH_MIN) {
 				seeds.push({

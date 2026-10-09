@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
 	executeCall,
+	type LlmClient,
 	MemoryGraphSource,
 	planByKeywords,
+	runAgent,
 	type Subgraph,
 } from "../src/index.ts";
 
@@ -94,5 +96,51 @@ describe("overview tool", () => {
 		expect(
 			planByKeywords("What are the most important events of Genesis?", []),
 		).toEqual([{ tool: "overview", entity: "events" }]);
+	});
+});
+
+describe("questions that name nobody", () => {
+	async function plannerPrompt(question: string) {
+		const prompts: string[] = [];
+		const outputs: unknown[] = [
+			{ reasoning: "", calls: [] },
+			{ sentences: [], insufficient_context: true },
+		];
+		const llm: LlmClient = {
+			async complete<T>(request: { prompt: string }) {
+				prompts.push(request.prompt);
+				return {
+					output: outputs.shift() as T,
+					usage: {
+						model: "fake-model",
+						input_tokens: 10,
+						output_tokens: 5,
+						cost_usd: 0.001,
+					},
+				};
+			},
+		};
+		const graph = new MemoryGraphSource({
+			indexId: "test-index",
+			entities: [
+				{ ...entity("per_noah", "Noah", "person"), embedding: [1, 0] },
+			],
+			edges: [],
+			aliases: [],
+		});
+		await runAgent(graph, question, llm, async () => [1, 0]);
+		return prompts[0] ?? "";
+	}
+
+	it("start from the entity nearest in meaning", async () => {
+		expect(await plannerPrompt("Who built the ark?")).toContain(
+			"per_noah: Noah",
+		);
+	});
+
+	it("except whole-book questions, where a near entity only lures the planner away", async () => {
+		expect(
+			await plannerPrompt("What are the most important events of Genesis?"),
+		).toContain("No entity names were recognized in the question.");
 	});
 });

@@ -395,7 +395,7 @@ async function overviewStep(
 	return step;
 }
 
-const OVERVIEW_WORDS =
+export const OVERVIEW_WORDS =
 	/\b(main|most important|key|major|principal|central)\b.*\b(characters?|people|persons|figures|events?|stories|story)\b/;
 const ANCESTOR_WORDS =
 	/\b(ancestors?|ancestry|forefathers?|fathers? of .+ fathers?|lineage|genealogy|family line|descended from|line of)\b/;

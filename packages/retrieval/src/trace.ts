@@ -80,6 +80,7 @@ export const TraceStep = z.object({
 		"descendants",
 		"relatives",
 		"path",
+		"overview",
 	]),
 	args: z.record(z.string(), z.union([z.string(), z.number()])),
 	entity_id: z.string().optional(),

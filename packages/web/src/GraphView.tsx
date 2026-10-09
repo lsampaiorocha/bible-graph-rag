@@ -1,4 +1,5 @@
 import type { RetrievalTrace } from "@kgrag/retrieval";
+import { forceCollide } from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, {
 	type ForceGraphMethods,
@@ -291,6 +292,14 @@ export function GraphView({
 		// Stronger repulsion and longer links than the defaults keep labels from overlapping.
 		graphRef.current?.d3Force("charge")?.strength(-160);
 		graphRef.current?.d3Force("link")?.distance(45);
+		// Labels sit under their nodes, so siblings in a family tree overlap unless each
+		// node keeps clear of its neighbours by about half its label's width.
+		graphRef.current?.d3Force(
+			"collide",
+			forceCollide<GraphNode>(
+				(node) => Math.max(8, shortLabel(node.label).length * 3.3) + 2,
+			),
+		);
 	}, [width]);
 
 	const hasAnswer = Boolean(trace?.answer);

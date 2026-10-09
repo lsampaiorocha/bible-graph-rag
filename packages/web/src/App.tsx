@@ -12,10 +12,10 @@ import {
 
 const EXAMPLE_QUESTIONS = [
 	"Who were the ancestors of Noah?",
-	"Who were the sons of Noah?",
-	"Who did Jacob marry?",
+	"Who are the main characters of Genesis?",
+	"Who were the children of Jacob?",
+	"How is Joseph related to Ishmael?",
 	"What happened at Bethel?",
-	"Who was Lot?",
 ];
 
 type PanelTab = "answer" | "details" | "trace";

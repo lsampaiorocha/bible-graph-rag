@@ -29,6 +29,7 @@ export const TOOLS = [
 	"descendants",
 	"relatives",
 	"path",
+	"overview",
 ] as const;
 export type ToolName = (typeof TOOLS)[number];
 export const MAX_TOOL_CALLS = 3;
@@ -183,6 +184,8 @@ export async function executeCall(
 	context: ToolContext = {},
 ): Promise<TraceStep> {
 	const started = performance.now();
+	if (call.tool === "overview")
+		return overviewStep(source, call, index, into, started);
 	const args: Record<string, string | number> = { entity: call.entity };
 	if (call.relation) args.relation = call.relation;
 	if (call.generations) args.generations = call.generations;
@@ -321,6 +324,72 @@ export async function executeCall(
 const CONNECTION_WORDS =
 	/\b(related|relation|relationship|connected|connection|kin)\b/;
 const KINSHIP_WORDS = /\b(related|relation|relationship|kin)\b/;
+async function overviewStep(
+	source: GraphSource,
+	call: ToolCall,
+	index: number,
+	into: Subgraph,
+	started: number,
+): Promise<TraceStep> {
+	const kind = /event|stor|happen/i.test(call.entity) ? "event" : "person";
+	const cards = await source.overview(kind);
+	const ids = cards.map((card) => card.id);
+	// Main characters come with the links among them; main events with their participants.
+	const rows =
+		kind === "person"
+			? await source.corridor(ids, 0, null)
+			: await source.corridor(ids, 1, ["PARTICIPATED_IN"]);
+	cards.forEach((card, rank) => {
+		into.nodes.set(card.id, {
+			id: card.id,
+			label: card.label,
+			hop: 0,
+			score: 1 / (1 + rank),
+			status: "context",
+		});
+	});
+	for (const row of rows) {
+		for (const [id, label] of [
+			[row.source, row.sourceLabel],
+			[row.target, row.targetLabel],
+		] as const) {
+			if (!into.nodes.has(id))
+				into.nodes.set(id, {
+					id,
+					label,
+					hop: 1,
+					score: 0.5,
+					status: "context",
+				});
+		}
+		if (!into.edges.has(row.edgeId))
+			into.edges.set(row.edgeId, {
+				id: row.edgeId,
+				source: row.source,
+				target: row.target,
+				type: row.type,
+				hop: 1,
+				score: row.supportCount,
+				status: "context",
+				evidence_chunk_ids: [],
+			});
+	}
+	const step: TraceStep = {
+		index,
+		tool: "overview",
+		args: { entity: kind === "event" ? "events" : "people" },
+		node_ids: [
+			...new Set([...ids, ...rows.flatMap((row) => [row.source, row.target])]),
+		].sort(),
+		edge_ids: rows.map((row) => row.edgeId).sort(),
+		ms: Math.round(performance.now() - started),
+	};
+	if (cards.length === 0) step.note = "no overview ranks in this graph";
+	return step;
+}
+
+const OVERVIEW_WORDS =
+	/\b(main|most important|key|major|principal|central)\b.*\b(characters?|people|persons|figures|events?|stories|story)\b/;
 const ANCESTOR_WORDS =
 	/\b(ancestors?|ancestry|forefathers?|fathers? of .+ fathers?|lineage|genealogy|family line|descended from|line of)\b/;
 const DESCENDANT_WORDS =
@@ -345,6 +414,14 @@ export function planByKeywords(
 	seeds: SeedMatch[],
 ): ToolCall[] {
 	const text = question.toLowerCase();
+	const overview = OVERVIEW_WORDS.exec(text);
+	if (overview)
+		return [
+			{
+				tool: "overview",
+				entity: /event|stor/.test(overview[2] ?? "") ? "events" : "people",
+			},
+		];
 	const people = seeds.filter(({ seed }) => seed.node_id.startsWith("per_"));
 	const subject = people[0] ?? seeds[0];
 	if (!subject) return [];

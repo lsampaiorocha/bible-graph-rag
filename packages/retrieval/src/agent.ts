@@ -109,6 +109,7 @@ Tools (entity = an entity id from the list you are given, or a name):
 - relatives(entity, relation): one kind of direct family tie; relation is one of ${RELATIONS.join(", ")}.
 - explore(entity): everything closely linked to an entity: people, places, events. Use for open questions such as what happened, who someone was, why something happened.
 - path(entity, other, family_only): the shortest chains of links joining two entities, avoiding hubs such as God. With family_only true it follows only parent, sibling and spouse links, up to 6; otherwise any links, up to 4. Use for how one person or place is related or connected to another; family_only for kinship. Always set both entity and other.
+- overview(entity): the whole book at a glance; entity = people for its main characters and the links among them, or events for the leading event of each of its main stories, in story order. Use for questions about the main characters, the most important events or what happens in the book overall.
 - find_entity(entity): list every entity with that name. Use when the question could mean several people with the same name and the list does not settle it.
 
 Rules:
@@ -121,6 +122,7 @@ Rules:
 export const ANSWER_SYSTEM = `You answer a question about the King James Bible using only the context given: entities [E…], relationships [R…] and verses [C…]. Do not add facts from memory.
 
 - Answer in a few plain sentences. For a family line, name the people in order.
+- For an overview of a book's main characters or main events, give one sentence for each, in story order, saying why it matters.
 - When the question asks for all of someone's ancestors or descendants, name every one the context gives, not a sample: one sentence per parent, such as "Jacob's sons by Leah: Reuben, Simeon, Levi, Judah, Issachar and Zebulun."
 - After each sentence, cite the handles that support it, such as ["R1", "C2"]. Every sentence needs at least one citation; prefer verses [C…] and relationships [R…].
 - If the context does not answer the question, say what it does show and set insufficient_context to true.`;

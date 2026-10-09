@@ -7,6 +7,7 @@ const TOOL_LABELS: Record<string, string> = {
 	descendants: "descendants",
 	relatives: "relatives",
 	path: "path",
+	overview: "overview",
 };
 
 interface AnswerPanelProps {

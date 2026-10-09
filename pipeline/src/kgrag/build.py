@@ -1,5 +1,6 @@
 import hashlib
-from collections import Counter
+import math
+from collections import Counter, defaultdict
 
 import networkx as nx
 
@@ -9,6 +10,8 @@ from kgrag.schema import GROUP, PERSON, PLACE, RELATION_DOMAINS
 
 SYMMETRIC_TYPES = {"SIBLING_OF", "SPOUSE_OF"}
 GRAPH_SEED = 42
+MAIN_CHARACTERS = 15
+STORY_CLUSTER_MIN = 10
 
 
 def edge_id(edge_type: str, source: str, target: str, other_label: str | None) -> str:
@@ -239,6 +242,46 @@ def add_graph_layout(entities: list[dict], edges: list[dict]) -> None:
         entity["community"] = community_of[entity["id"]]
         entity["x"] = round(float(x), 4)
         entity["y"] = round(float(y), 4)
+
+
+def add_overview_ranks(
+    entities: list[dict], edges: list[dict], verse_order: dict[str, int]
+) -> None:
+    # Whole-book questions ("main characters", "main events") read these ranks, the way
+    # GraphRAG answers global questions from its communities: the most named people,
+    # and the leading event of each story cluster in story order.
+    by_id = {entity["id"]: entity for entity in entities}
+    people = sorted(
+        (entity for entity in entities if entity["kind"] == PERSON),
+        key=lambda entity: (-entity["mention_count"], entity["id"]),
+    )
+    for rank, person in enumerate(people[:MAIN_CHARACTERS], 1):
+        person["overview_rank"] = rank
+    # A long scene with central people outweighs a one-verse aside or a name list.
+    participant_weight: dict[str, float] = defaultdict(float)
+    for edge in edges:
+        if edge["type"] == "PARTICIPATED_IN":
+            participant_weight[edge["target"]] += math.log1p(
+                by_id[edge["source"]]["mention_count"]
+            )
+    cluster_sizes = Counter(entity["community"] for entity in entities)
+    leaders: dict[int, tuple[float, str, dict]] = {}
+    for event in entities:
+        if (
+            event["kind"] != "event"
+            or cluster_sizes[event["community"]] < STORY_CLUSTER_MIN
+        ):
+            continue
+        weight = event["mention_count"] * (1 + participant_weight[event["id"]])
+        best = leaders.get(event["community"])
+        if best is None or (-weight, event["id"]) < (-best[0], best[1]):
+            leaders[event["community"]] = (weight, event["id"], event)
+    story = sorted(
+        (event for _, _, event in leaders.values()),
+        key=lambda event: (verse_order[event["first_verse"]], event["id"]),
+    )
+    for rank, event in enumerate(story, 1):
+        event["overview_rank"] = rank
 
 
 INDEX_DIR = DATA_DIR / "index"

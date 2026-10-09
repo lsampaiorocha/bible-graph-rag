@@ -146,6 +146,17 @@ export class Neo4jGraphSource implements GraphSource {
 		);
 	}
 
+	async overview(kind: "person" | "event"): Promise<EntityCard[]> {
+		return this.rows<EntityCard>(
+			`MATCH (e:Entity {kind: $kind}) WHERE e.overview_rank IS NOT NULL
+			 RETURN e.id AS id, e.name AS label, e.kind AS kind, e.gender AS gender,
+			        coalesce(e.description, '') AS description, e.first_verse AS firstVerse,
+			        e.mention_count AS mentionCount
+			 ORDER BY e.overview_rank`,
+			{ kind },
+		);
+	}
+
 	async corridor(
 		ids: string[],
 		reach: number,

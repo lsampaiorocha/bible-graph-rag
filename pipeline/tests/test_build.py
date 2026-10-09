@@ -1,4 +1,4 @@
-from kgrag.build import build_index, edge_id
+from kgrag.build import add_overview_ranks, build_index, edge_id
 from kgrag.resolve import resolve_naive
 
 LAYOUT_FIELDS = {"degree", "community", "x", "y"}
@@ -185,3 +185,62 @@ def test_naive_build_merges_same_names_across_passages_and_counts_supporting_pas
         },
     ]
     assert all(LAYOUT_FIELDS <= entity.keys() for entity in entities)
+
+
+def test_overview_ranks_name_the_most_named_people_and_each_large_clusters_leading_event_in_story_order():
+    def entity(entity_id, kind, mentions, community, first_verse):
+        return {
+            "id": entity_id,
+            "kind": kind,
+            "mention_count": mentions,
+            "community": community,
+            "first_verse": first_verse,
+        }
+
+    flood_cluster = [
+        entity(f"per_flood_{i}", "person", 1, 1, "Gen.7.1") for i in range(8)
+    ]
+    entities = [
+        entity("per_noah", "person", 35, 1, "Gen.5.29"),
+        entity("evt_flood", "event", 8, 1, "Gen.7.17"),
+        entity("evt_ark", "event", 8, 1, "Gen.6.14"),
+        *flood_cluster,
+        entity("per_abram", "person", 164, 0, "Gen.11.26"),
+        entity("evt_call", "event", 3, 0, "Gen.12.1"),
+        *[entity(f"per_tiny_{i}", "person", 1, 2, "Gen.36.1") for i in range(3)],
+        entity("evt_tiny", "event", 50, 2, "Gen.36.2"),
+    ]
+    entities += [
+        entity(f"per_abram_kin_{i}", "person", 1, 0, "Gen.11.27") for i in range(8)
+    ]
+    edges = [
+        {"type": "PARTICIPATED_IN", "source": "per_noah", "target": "evt_flood"},
+        {"type": "PARTICIPATED_IN", "source": "per_abram", "target": "evt_call"},
+    ]
+    verse_order = {
+        "Gen.5.29": 0,
+        "Gen.6.14": 1,
+        "Gen.7.1": 2,
+        "Gen.7.17": 3,
+        "Gen.11.26": 4,
+        "Gen.11.27": 5,
+        "Gen.12.1": 6,
+        "Gen.36.1": 7,
+        "Gen.36.2": 8,
+    }
+
+    add_overview_ranks(entities, edges, verse_order)
+
+    ranked_events = sorted(
+        (e["overview_rank"], e["id"])
+        for e in entities
+        if e["kind"] == "event" and "overview_rank" in e
+    )
+    assert ranked_events == [(1, "evt_flood"), (2, "evt_call")]
+    assert [
+        e["id"]
+        for e in sorted(
+            (e for e in entities if e["kind"] == "person" and "overview_rank" in e),
+            key=lambda e: e["overview_rank"],
+        )
+    ][:2] == ["per_abram", "per_noah"]

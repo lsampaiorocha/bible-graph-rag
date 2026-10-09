@@ -105,6 +105,7 @@ def load_graph(
                     "y": entity["y"],
                     "gender": entity.get("gender"),
                     "place_kind": entity.get("place_kind"),
+                    "overview_rank": entity.get("overview_rank"),
                     "embedding": entity_vectors[entity["id"]],
                 }
             ),

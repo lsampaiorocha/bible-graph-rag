@@ -120,6 +120,9 @@ export interface GraphSource {
 	// Direct family links of one kind; siblings also come through a shared parent,
 	// returned as that parent's two links (depth 1 to the person, 2 to the sibling).
 	relatives(personId: string, relation: Relation): Promise<LinkRow[]>;
+	// The book's main characters ("person") or the leading event of each story cluster
+	// ("event"), in rank order, as ranked when the graph was built.
+	overview(kind: "person" | "event"): Promise<EntityCard[]>;
 	// Links among the entities within `reach` links of any given id, optionally only of
 	// the given types: the corridor a path between those ids can run through.
 	corridor(
@@ -151,6 +154,7 @@ export interface MemoryGraph {
 		description?: string;
 		firstVerse?: string | null;
 		embedding?: number[];
+		overviewRank?: number | null;
 	}[];
 	edges: {
 		id: string;
@@ -277,6 +281,18 @@ export class MemoryGraphSource implements GraphSource {
 			frontier = next;
 		}
 		return this.linkRows(depthByEdge).slice(0, MAX_LINEAGE_LINKS);
+	}
+
+	async overview(kind: "person" | "event"): Promise<EntityCard[]> {
+		const ranked = this.graph.entities
+			.filter((entity) => entity.kind === kind && entity.overviewRank)
+			.sort((a, b) => (a.overviewRank ?? 0) - (b.overviewRank ?? 0));
+		const cards = new Map(
+			(await this.entityCards(ranked.map((entity) => entity.id))).map(
+				(card) => [card.id, card],
+			),
+		);
+		return ranked.flatMap((entity) => cards.get(entity.id) ?? []);
 	}
 
 	async corridor(

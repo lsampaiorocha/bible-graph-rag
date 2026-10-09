@@ -10,7 +10,12 @@ import typer
 import yaml
 from dotenv import load_dotenv
 
-from kgrag.build import INDEX_DIR, add_graph_layout, build_index
+from kgrag.build import (
+    INDEX_DIR,
+    add_graph_layout,
+    add_overview_ranks,
+    build_index,
+)
 from kgrag.confirm import PURPOSE as CONFIRM_PURPOSE
 from kgrag.confirm import llm_confirmer
 from kgrag.corpus import (
@@ -365,6 +370,7 @@ def build_graph(
         )
         typer.echo(f"confirmation spend, both steps: ${budget.spent_this_run_usd:.4f}")
     add_graph_layout(entities, edges)
+    add_overview_ranks(entities, edges, verse_order)
 
     write_jsonl(out_dir / "entities.jsonl", entities)
     write_jsonl(out_dir / "edges.jsonl", edges)

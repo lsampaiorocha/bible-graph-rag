@@ -144,3 +144,74 @@ describe("questions that name nobody", () => {
 		).toContain("No entity names were recognized in the question.");
 	});
 });
+
+describe("links among retrieved people", () => {
+	it("are added, so a wife fetched as a spouse links to the children fetched as children", async () => {
+		const outputs: unknown[] = [
+			{
+				reasoning: "children and wives",
+				calls: [
+					{
+						tool: "relatives",
+						entity: "per_jacob",
+						relation: "children",
+						generations: null,
+						other: null,
+						family_only: null,
+					},
+					{
+						tool: "relatives",
+						entity: "per_jacob",
+						relation: "spouses",
+						generations: null,
+						other: null,
+						family_only: null,
+					},
+				],
+			},
+			{
+				sentences: [{ text: "Leah bore Reuben.", cites: ["R1"] }],
+				insufficient_context: false,
+			},
+		];
+		const llm: LlmClient = {
+			async complete<T>() {
+				return {
+					output: outputs.shift() as T,
+					usage: {
+						model: "fake-model",
+						input_tokens: 10,
+						output_tokens: 5,
+						cost_usd: 0.001,
+					},
+				};
+			},
+		};
+		const graph = new MemoryGraphSource({
+			indexId: "test-index",
+			entities: [
+				entity("per_jacob", "Jacob", "person"),
+				entity("per_leah", "Leah", "person"),
+				entity("per_reuben", "Reuben", "person"),
+			],
+			edges: [
+				link("r_father", "FATHER_OF", "per_jacob", "per_reuben"),
+				link("r_spouse", "SPOUSE_OF", "per_jacob", "per_leah"),
+				link("r_mother", "MOTHER_OF", "per_leah", "per_reuben"),
+			],
+			aliases: [],
+		});
+
+		const trace = await runAgent(
+			graph,
+			"Who were Jacob's children and their mothers?",
+			llm,
+		);
+
+		expect(trace.edges.map((edge) => edge.id).sort()).toEqual([
+			"r_father",
+			"r_mother",
+			"r_spouse",
+		]);
+	});
+});

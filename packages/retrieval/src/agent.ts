@@ -40,6 +40,8 @@ interface Plan {
 	reasoning: string;
 }
 
+const PARENT_LINK_TYPES = ["FATHER_OF", "MOTHER_OF"];
+
 const nullable = (schema: Record<string, unknown>) => ({
 	anyOf: [schema, { type: "null" }],
 });
@@ -269,6 +271,30 @@ export async function runAgent(
 					toolContext,
 				),
 			);
+	}
+	// Each tool fetches links from its own starting entity, so a link between two people
+	// it retrieved separately (a man's wife and his child) is missing. Adding the parent
+	// links among everyone retrieved shows the family structure and lets the answer cite it.
+	const people = [...subgraph.nodes.values()]
+		.filter((node) => node.status === "context" && node.id.startsWith("per_"))
+		.map((node) => node.id);
+	if (people.length > 1) {
+		for (const row of await source.corridor(people, 0, PARENT_LINK_TYPES)) {
+			if (subgraph.edges.has(row.edgeId)) continue;
+			subgraph.edges.set(row.edgeId, {
+				id: row.edgeId,
+				source: row.source,
+				target: row.target,
+				type: row.type,
+				hop: Math.max(
+					subgraph.nodes.get(row.source)?.hop ?? 0,
+					subgraph.nodes.get(row.target)?.hop ?? 0,
+				),
+				score: row.supportCount,
+				status: "context",
+				evidence_chunk_ids: [],
+			});
+		}
 	}
 	timings.retrieve = steps.reduce((sum, step) => sum + step.ms, 0);
 

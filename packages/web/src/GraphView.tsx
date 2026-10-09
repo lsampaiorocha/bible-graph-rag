@@ -239,6 +239,24 @@ export function GraphView({
 			),
 		[trace],
 	);
+	// What the answer uses: what it cites, plus anyone it names. The model often cites a
+	// verse rather than a person ("Leah bore Reuben" citing Gen 35:23), and that person
+	// should light up too.
+	const usedIds = useMemo(() => {
+		const used = new Set(
+			trace?.nodes
+				.filter((node) => node.status === "cited")
+				.map((node) => node.id),
+		);
+		const text =
+			trace?.answer?.sentences.map((sentence) => sentence.text).join(" ") ?? "";
+		for (const node of trace?.nodes ?? []) {
+			const label = node.label?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			if (label && new RegExp(`(?<![\\w'])${label}(?!\\w)`).test(text))
+				used.add(node.id);
+		}
+		return used;
+	}, [trace]);
 	// Only seeds a step used are ringed: an overview question matches names it never uses.
 	const seedIds = useMemo(() => {
 		const used = new Set(trace?.steps?.map((step) => step.entity_id));
@@ -345,17 +363,29 @@ export function GraphView({
 				: "td";
 	const shown = (status: VizStatus) =>
 		status === "cited" || status === "context";
-	// Once an answer exists, what it cites stays bright and what was only retrieved dims.
+	// Once an answer exists, what it uses stays bright and what was only retrieved dims.
 	const dimmed = (status: VizStatus) => hasAnswer && status === "context";
 	const isSeed = (node: GraphNode) => seedIds.has(String(node.id));
-	const statusOf = (node: GraphNode): VizStatus =>
-		node.status ??
-		traceNodeStatus.get(String(node.id)) ??
-		(trace ? "unreached" : "context");
-	const linkStatusOf = (link: GraphLink): VizStatus =>
-		link.status ??
-		traceEdgeStatus.get(link.id) ??
-		(trace ? "unreached" : "context");
+	const statusOf = (node: GraphNode): VizStatus => {
+		const status =
+			node.status ??
+			traceNodeStatus.get(String(node.id)) ??
+			(trace ? "unreached" : "context");
+		return status === "context" && usedIds.has(String(node.id))
+			? "cited"
+			: status;
+	};
+	const linkStatusOf = (link: GraphLink): VizStatus => {
+		const status =
+			link.status ??
+			traceEdgeStatus.get(link.id) ??
+			(trace ? "unreached" : "context");
+		return status === "context" &&
+			usedIds.has(link.fromId) &&
+			usedIds.has(link.toId)
+			? "cited"
+			: status;
+	};
 	const linkColorOf = (link: GraphLink) =>
 		({
 			cited: "#1d4ed8",
@@ -384,6 +414,9 @@ export function GraphView({
 		<div ref={ref} className="relative h-full w-full">
 			{mode === "focused" && trace && (
 				<div className="pointer-events-none absolute bottom-3 left-3 z-10 flex gap-3 rounded bg-white/85 px-2 py-1 text-[11px] text-gray-600">
+					<span>
+						bright = used in the answer, faded = retrieved but not used
+					</span>
 					<span>→ parent to child, or who/what to which</span>
 					<span>╌ married</span>
 					<span>┈ siblings</span>

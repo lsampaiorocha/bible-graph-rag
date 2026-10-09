@@ -256,3 +256,51 @@ describe("relatives", () => {
 		]);
 	});
 });
+
+describe("entity names", () => {
+	it("never resolve a book of the Bible to a person by meaning", async () => {
+		const graph = new MemoryGraphSource({
+			indexId: "test-index",
+			entities: [
+				{ ...entity("per_noah", "Noah", "person"), embedding: [1, 0] },
+			],
+			edges: [],
+			aliases: [],
+		});
+		const subgraph: Subgraph = { nodes: new Map(), edges: new Map() };
+
+		const step = await executeCall(
+			graph,
+			{ tool: "explore", entity: "Genesis" },
+			1,
+			subgraph,
+			{
+				embed: async () => [1, 0],
+			},
+		);
+
+		expect(step.note).toBe(
+			"Genesis is a book of the Bible, not a person, place or event",
+		);
+		expect(step.node_ids).toEqual([]);
+	});
+
+	it("still resolve a book's name that is also someone's name", async () => {
+		const graph = new MemoryGraphSource({
+			indexId: "test-index",
+			entities: [entity("per_job", "Job", "person")],
+			edges: [],
+			aliases: [{ key: "job", nodeId: "per_job" }],
+		});
+		const subgraph: Subgraph = { nodes: new Map(), edges: new Map() };
+
+		const step = await executeCall(
+			graph,
+			{ tool: "find_entity", entity: "Job" },
+			1,
+			subgraph,
+		);
+
+		expect(step.entity_id).toBe("per_job");
+	});
+});

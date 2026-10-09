@@ -52,6 +52,10 @@ export interface ToolCall {
 }
 
 const ENTITY_ID = /^(per|pla|grp|evt)_[a-z0-9_]+$/;
+// A book's name with no entity of that name (Genesis, unlike Job or Ruth) is not
+// matched by meaning, where it lands on someone ("Genesis" comes out as Noah).
+const BOOK_NAME =
+	/^(the )?(book of )?(bible|genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|(1|2|first|second) (samuel|kings|chronicles)|ezra|nehemiah|esther|job|psalms?|proverbs|ecclesiastes|song of (songs|solomon)|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|obadiah|jonah|micah|nahum|habakkuk|zephaniah|haggai|zechariah|malachi|matthew|mark|luke|john|acts|romans|(1|2|first|second) (corinthians|thessalonians|timothy|peter)|(1|2|3) john|galatians|ephesians|philippians|colossians|titus|philemon|hebrews|james|jude|revelation)$/i;
 const PERSON_TOOLS = new Set<ToolName>([
 	"ancestors",
 	"descendants",
@@ -81,6 +85,11 @@ async function resolveEntity(
 	);
 	const [best] = hits;
 	if (!best) {
+		if (BOOK_NAME.test(call.entity.trim()))
+			return {
+				candidates: [],
+				note: `${call.entity} is a book of the Bible, not a person, place or event`,
+			};
 		// No name matched (a misspelling, a description): fall back to the nearest entity
 		// by meaning, if it is close enough to trust.
 		const nearest = context.embed

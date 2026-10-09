@@ -27,9 +27,14 @@ interface Question {
 	question: string;
 }
 
-// --run adds to an existing run folder; --only limits the run to some question ids.
+// --run adds to an existing run folder; --only and --modes limit it to some question ids
+// and modes.
 const { values: options } = parseArgs({
-	options: { run: { type: "string" }, only: { type: "string" } },
+	options: {
+		run: { type: "string" },
+		only: { type: "string" },
+		modes: { type: "string" },
+	},
 });
 const only = options.only?.split(",");
 const questions = (
@@ -38,7 +43,11 @@ const questions = (
 const runId =
 	options.run ?? new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
 const jobs = questions.flatMap((question) =>
-	Object.entries(MODES).map(([mode, run]) => ({ mode, question, run })),
+	Object.entries(MODES)
+		.filter(
+			([mode]) => !options.modes || options.modes.split(",").includes(mode),
+		)
+		.map(([mode, run]) => ({ mode, question, run })),
 );
 let done = 0;
 let cost = 0;

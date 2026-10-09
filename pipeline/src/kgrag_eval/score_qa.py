@@ -55,7 +55,7 @@ PARENT_TYPES = {"FATHER_OF", "MOTHER_OF"}
 
 GROUNDING_SYSTEM = """You check whether sources back each sentence of an answer about Genesis (King James Version).
 
-For each numbered sentence, answer supported when the sources listed under it state or directly imply every claim in the sentence, and unsupported otherwise. A source line starting [link] is a family or story link read from the verses shown with it. Use only the sources given, never outside knowledge."""
+For each numbered sentence, answer supported when the sources listed under it state or directly imply every claim in the sentence, and unsupported otherwise. A source line starting [entity] or [link] is a summary the graph extracted from the verses; a [link] line lists those verses under it. Use only the sources given, never outside knowledge."""
 
 
 class SentenceSupport(BaseModel):
@@ -149,18 +149,21 @@ def score_lineage(
 
 
 def source_lines(
-    cite: str, trace: dict, verse_text: dict[str, str], passage_text: dict[str, str]
+    cite: str,
+    trace: dict,
+    verse_text: dict[str, str],
+    passage_text: dict[str, str],
+    card_text: dict[str, str],
 ) -> list[str]:
     if cite in passage_text:
         return [f"[{cite}] {passage_text[cite]}"]
     if cite in verse_text:
         return [f"[{cite}] {verse_text[cite]}"]
-    labels = {node["id"]: node.get("label", node["id"]) for node in trace["nodes"]}
     edge = next((edge for edge in trace["edges"] if edge["id"] == cite), None)
     if edge is None:
-        return [f"[entity] {labels.get(cite, cite)}"]
+        return [f"[entity] {card_text.get(cite, cite)}"]
     return [
-        f"[link] {labels.get(edge['source'], edge['source'])} {edge['type']} {labels.get(edge['target'], edge['target'])}",
+        f"[link] {card_text.get(cite, cite)}",
         *(
             f"  [{verse}] {verse_text[verse]}"
             for verse in edge["evidence_chunk_ids"]
@@ -174,6 +177,7 @@ def check_grounding(
     pairs: list[tuple[dict, dict]],
     verse_text: dict[str, str],
     passage_text: dict[str, str],
+    card_text: dict[str, str],
     workers: int,
 ) -> None:
     # Uncited sentences count as unsupported without asking; so does every
@@ -196,7 +200,9 @@ def check_grounding(
             + "\n".join(
                 line
                 for cite in sentence["cites"]
-                for line in source_lines(cite, trace, verse_text, passage_text)
+                for line in source_lines(
+                    cite, trace, verse_text, passage_text, card_text
+                )
             )
             for index, sentence in cited
         )

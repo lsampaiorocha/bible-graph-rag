@@ -433,7 +433,18 @@ def qa(
         or {}
     )
     gold, _ = apply_corrections(load_gold(), corrections)
-    _, entities, _ = load_index(index_id)
+    _, entities, edges = load_index(index_id)
+    names = {entity["id"]: entity["name"] for entity in entities}
+    # What the model was shown for each entity and link it could cite.
+    card_text = {
+        entity["id"]: f"{entity['name']} ({entity['kind']}): {entity['description']}"
+        for entity in entities
+    } | {
+        edge[
+            "id"
+        ]: f"{names[edge['source']]} {edge['type']} {names[edge['target']]}: {edge['description']}"
+        for edge in edges
+    }
     gold_of_entity = majority(
         align_mentions(entities, "person", gold.spans), "entity", "gold"
     )
@@ -492,7 +503,7 @@ def qa(
         purpose=JUDGE_PURPOSE,
     )
     judge_rows(client, rows, questions, workers)
-    check_grounding(client, pairs, verse_text, passage_text, workers)
+    check_grounding(client, pairs, verse_text, passage_text, card_text, workers)
     grades_path = REPO_ROOT / "eval" / "labels" / f"qa_grades_{run_id}.csv"
     human = read_human_grades(grades_path)
     write_grades(grades_path, rows, questions, human)

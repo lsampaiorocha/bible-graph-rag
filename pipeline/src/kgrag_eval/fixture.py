@@ -6,6 +6,7 @@ import yaml
 
 from kgrag.build import build_index
 from kgrag.corpus import REPO_ROOT, read_jsonl
+from kgrag.infer import ParentCandidate, ParentConfirmer, infer_parent_links
 from kgrag.resolve import AliasRules, Cluster, Confirmer, Occurrence, resolve_v1
 from kgrag_eval.report import build_report
 from kgrag_eval.theographic import gold_from_records, in_scope, parse_md_mentions
@@ -44,6 +45,14 @@ def replay_confirmer(decisions: dict[str, bool]) -> Confirmer:
     return confirm
 
 
+def replay_parent_confirmer(decisions: dict[str, dict]) -> ParentConfirmer:
+    def confirm(proposal: ParentCandidate) -> tuple[bool, str]:
+        decision = decisions.get(proposal.key, {"confirmed": False, "reason": ""})
+        return decision["confirmed"], decision["reason"]
+
+    return confirm
+
+
 def write_json_gz(path: Path, value: object) -> None:
     path.write_bytes(
         gzip.compress(json.dumps(value, sort_keys=True).encode("utf-8"), mtime=0)
@@ -55,7 +64,10 @@ def read_json_gz(path: Path) -> object:
 
 
 def make_fixture(
-    extractions: list[dict], audit_path: Path, records: dict[str, dict[str, dict]]
+    extractions: list[dict],
+    audit_path: Path,
+    parent_audit_path: Path,
+    records: dict[str, dict[str, dict]],
 ) -> None:
     verses = {
         rid: v for rid, v in records["verses"].items() if in_scope(v["osisRef"], SCOPE)
@@ -131,6 +143,16 @@ def make_fixture(
     (FIXTURE_DIR / "confirm_decisions.json").write_text(
         json.dumps(decisions, indent=1, sort_keys=True), encoding="utf-8"
     )
+    parent_decisions = {
+        f"{row['edge_type']}|{row['parent']}|{row['child']}": {
+            "confirmed": row["confirmed"],
+            "reason": row["reason"],
+        }
+        for row in read_jsonl(parent_audit_path)
+    }
+    (FIXTURE_DIR / "parent_decisions.json").write_text(
+        json.dumps(parent_decisions, indent=1, sort_keys=True), encoding="utf-8"
+    )
     (FIXTURE_DIR / "expected_report.json").write_text(
         json.dumps(run_fixture(), indent=1), encoding="utf-8"
     )
@@ -155,6 +177,13 @@ def run_fixture() -> dict:
         extractions, verse_order, replay_confirmer(decisions), AliasRules()
     )
     entities, edges = build_index(extractions, resolution, verse_order, layout=False)
+    parent_decisions = json.loads(
+        (FIXTURE_DIR / "parent_decisions.json").read_text(encoding="utf-8")
+    )
+    added, _ = infer_parent_links(
+        entities, edges, verse_order, replay_parent_confirmer(parent_decisions)
+    )
+    edges = sorted(edges + added, key=lambda edge: edge["id"])
     corrections = (
         yaml.safe_load(
             (REPO_ROOT / "eval" / "gold_corrections.yaml").read_text(encoding="utf-8")

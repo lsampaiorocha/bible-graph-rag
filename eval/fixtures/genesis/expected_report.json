@@ -106,15 +106,15 @@
   },
   "links": {
    "FATHER_OF": {
-    "precision": 0.97,
-    "recall": 0.9024,
-    "f1": 0.935,
+    "precision": 0.9704,
+    "recall": 0.9129,
+    "f1": 0.9408,
     "gold": 287
    },
    "MOTHER_OF": {
-    "precision": 0.8333,
-    "recall": 0.8333,
-    "f1": 0.8333,
+    "precision": 0.8361,
+    "recall": 0.85,
+    "f1": 0.843,
     "gold": 60
    },
    "SPOUSE_OF": {
@@ -131,9 +131,9 @@
    }
   },
   "siblings_with_shared_parents": {
-   "precision": 0.7933,
-   "recall": 0.8811,
-   "f1": 0.8349,
+   "precision": 0.7927,
+   "recall": 0.8844,
+   "f1": 0.836,
    "gold": 614
   },
   "places": {
@@ -279,15 +279,15 @@
   },
   "links": {
    "FATHER_OF": {
-    "precision": 0.9738,
-    "recall": 0.9091,
-    "f1": 0.9403,
+    "precision": 0.9741,
+    "recall": 0.9196,
+    "f1": 0.946,
     "gold": 286
    },
    "MOTHER_OF": {
-    "precision": 0.8333,
-    "recall": 0.8333,
-    "f1": 0.8333,
+    "precision": 0.8361,
+    "recall": 0.85,
+    "f1": 0.843,
     "gold": 60
    },
    "SPOUSE_OF": {
@@ -304,9 +304,9 @@
    }
   },
   "siblings_with_shared_parents": {
-   "precision": 0.7933,
-   "recall": 0.8811,
-   "f1": 0.8349,
+   "precision": 0.7927,
+   "recall": 0.8844,
+   "f1": 0.836,
    "gold": 614
   },
   "places": {

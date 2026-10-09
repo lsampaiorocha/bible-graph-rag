@@ -10,7 +10,7 @@ import typer
 import yaml
 from dotenv import load_dotenv
 
-from kgrag.build import INDEX_DIR, build_index
+from kgrag.build import INDEX_DIR, add_graph_layout, build_index
 from kgrag.confirm import PURPOSE as CONFIRM_PURPOSE
 from kgrag.confirm import llm_confirmer
 from kgrag.corpus import (
@@ -40,6 +40,8 @@ from kgrag.extract import (
     load_system_prompt,
     user_prompt,
 )
+from kgrag.infer import PURPOSE as PARENT_PURPOSE
+from kgrag.infer import infer_parent_links, llm_parent_confirmer
 from kgrag.llm import (
     Budget,
     BudgetExceeded,
@@ -323,7 +325,32 @@ def build_graph(
         typer.echo(f"confirmation spend: ${budget.spent_this_run_usd:.4f}")
     else:
         raise typer.BadParameter(f"unknown resolver {resolver!r}; use naive or v1")
-    entities, edges = build_index(extractions, resolution, verse_order)
+    entities, edges = build_index(extractions, resolution, verse_order, layout=False)
+    if resolver == "v1":
+        parent_client = ClaudeCodeClient(
+            ModelConfig(model=model, effort=effort),
+            budget=budget,
+            ledger=ledger,
+            run_id=client.run_id,
+            purpose=PARENT_PURPOSE,
+        )
+        added, parent_decisions = infer_parent_links(
+            entities,
+            edges,
+            verse_order,
+            llm_parent_confirmer(
+                parent_client,
+                {entity["id"]: entity["name"] for entity in entities},
+                verse_text,
+            ),
+        )
+        edges = sorted(edges + added, key=lambda edge: edge["id"])
+        write_jsonl(out_dir / "parent_audit.jsonl", parent_decisions)
+        typer.echo(
+            f"parent links inferred: {len(added)} of {len(parent_decisions)} proposed"
+        )
+        typer.echo(f"confirmation spend, both steps: ${budget.spent_this_run_usd:.4f}")
+    add_graph_layout(entities, edges)
 
     write_jsonl(out_dir / "entities.jsonl", entities)
     write_jsonl(out_dir / "edges.jsonl", edges)

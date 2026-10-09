@@ -124,6 +124,7 @@ def load_graph(
                     "evidence_passages": edge["evidence_passages"],
                     "support_count": edge["support_count"],
                     "other_label": edge["other_label"],
+                    "inferred": edge.get("inferred"),
                 }
             ),
         }

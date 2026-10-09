@@ -399,7 +399,12 @@ def fixture(
         name: load_records(f"{name}.json")
         for name in ("verses", "people", "places", "events")
     }
-    make_fixture(extractions, INDEX_DIR / index_id / "er_audit.jsonl", records)
+    make_fixture(
+        extractions,
+        INDEX_DIR / index_id / "er_audit.jsonl",
+        INDEX_DIR / index_id / "parent_audit.jsonl",
+        records,
+    )
     typer.echo(f"fixture written to {FIXTURE_DIR}")
 
 

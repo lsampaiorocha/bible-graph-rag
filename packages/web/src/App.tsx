@@ -73,8 +73,11 @@ export function App() {
 			if (!response.ok)
 				throw new Error(body.error ?? `HTTP ${response.status}`);
 			setTrace(body);
+			// An overview step names no entity, so nothing is preselected for it.
 			setSelectedId(
-				body.steps?.[0]?.entity_id ?? body.seeds[0]?.node_id ?? null,
+				body.steps?.length
+					? (body.steps[0]?.entity_id ?? null)
+					: (body.seeds[0]?.node_id ?? null),
 			);
 			setTab("answer");
 		} catch (reason) {

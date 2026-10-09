@@ -187,6 +187,18 @@ export function GraphView({
 		undefined,
 	);
 	const needsFit = useRef(true);
+	// Labels keep a fixed size on screen, so how far apart nodes must sit (in graph units)
+	// depends on the zoom the fit lands on; each fit rescales the collision once or twice.
+	const labelScale = useRef(1);
+	const labelPasses = useRef(0);
+	const setCollide = (scale: number) =>
+		graphRef.current?.d3Force(
+			"collide",
+			forceCollide<GraphNode>(
+				(node) =>
+					(Math.max(8, shortLabel(node.label).length * 3.6) + 2) / scale,
+			),
+		);
 	const [revealedHop, setRevealedHop] = useState(0);
 
 	const kindById = useMemo(
@@ -216,13 +228,22 @@ export function GraphView({
 			),
 		[trace],
 	);
-	const seedIds = useMemo(
-		() => new Set(trace?.seeds.map((seed) => seed.node_id)),
-		[trace],
-	);
+	// Only seeds a step used are ringed: an overview question matches names it never uses.
+	const seedIds = useMemo(() => {
+		const used = new Set(trace?.steps?.map((step) => step.entity_id));
+		return new Set(
+			trace?.seeds
+				.map((seed) => seed.node_id)
+				.filter((id) => !trace.steps?.length || used.has(id)),
+		);
+	}, [trace]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: setCollide only reads refs.
 	useEffect(() => {
 		if (!focused) return;
+		labelScale.current = 1;
+		labelPasses.current = 0;
+		setCollide(1);
 		setRevealedHop(0);
 		const timers = Array.from({ length: focused.maxHop }, (_, index) =>
 			setTimeout(
@@ -292,14 +313,7 @@ export function GraphView({
 		// Stronger repulsion and longer links than the defaults keep labels from overlapping.
 		graphRef.current?.d3Force("charge")?.strength(-160);
 		graphRef.current?.d3Force("link")?.distance(45);
-		// Labels sit under their nodes, so siblings in a family tree overlap unless each
-		// node keeps clear of its neighbours by about half its label's width.
-		graphRef.current?.d3Force(
-			"collide",
-			forceCollide<GraphNode>(
-				(node) => Math.max(8, shortLabel(node.label).length * 3.3) + 2,
-			),
-		);
+		setCollide(labelScale.current);
 	}, [width]);
 
 	const hasAnswer = Boolean(trace?.answer);
@@ -362,6 +376,20 @@ export function GraphView({
 						if (mode === "focused" && needsFit.current) {
 							needsFit.current = false;
 							graphRef.current?.zoomToFit(500, 60);
+							setTimeout(() => {
+								const scale = graphRef.current?.zoom() ?? 1;
+								if (
+									labelPasses.current < 2 &&
+									Math.abs(scale - labelScale.current) / labelScale.current >
+										0.12
+								) {
+									labelPasses.current += 1;
+									labelScale.current = scale;
+									setCollide(scale);
+									needsFit.current = true;
+									graphRef.current?.d3ReheatSimulation();
+								}
+							}, 550);
 						}
 					}}
 					nodeLabel={(node) =>
@@ -369,7 +397,8 @@ export function GraphView({
 					}
 					nodeCanvasObject={(node, context, scale) => {
 						const status = statusOf(node);
-						const radius = radiusOf(node);
+						// Circles stop growing past 1.5x zoom so small graphs do not show giant dots.
+						const radius = radiusOf(node) * Math.min(1, 1.5 / scale);
 						const x = node.x ?? 0;
 						const y = node.y ?? 0;
 						context.globalAlpha = dimmed(status) ? 0.35 : 1;
@@ -402,12 +431,12 @@ export function GraphView({
 						}
 						context.globalAlpha = 1;
 					}}
-					nodePointerAreaPaint={(node, color, context) => {
+					nodePointerAreaPaint={(node, color, context, scale) => {
 						context.beginPath();
 						context.arc(
 							node.x ?? 0,
 							node.y ?? 0,
-							radiusOf(node) + 3,
+							radiusOf(node) * Math.min(1, 1.5 / scale) + 3,
 							0,
 							2 * Math.PI,
 						);

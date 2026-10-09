@@ -1,5 +1,6 @@
 import json
 import statistics
+from collections import defaultdict
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,22 +14,26 @@ from kgrag.corpus import CORPUS_DIR, REPO_ROOT, read_jsonl, read_passage_ids
 from kgrag.extract import extraction_dir, load_extractions
 from kgrag.llm import Budget, BudgetExceeded, ClaudeCodeClient, Ledger, ModelConfig
 from kgrag_eval.bakeoff import ConfigScore, load_extraction, score_passage
-from kgrag_eval.entities import score_entities
+from kgrag_eval.entities import align_mentions, majority, score_entities
 from kgrag_eval.fixture import FIXTURE_DIR, make_fixture
 from kgrag_eval.fixture import SCOPE as FIXTURE_SCOPE
 from kgrag_eval.narrative import sample_narrative_edges, write_sample
 from kgrag_eval.report import build_report, entity_summary, render_report
 from kgrag_eval.score_qa import (
     JUDGE_PURPOSE,
+    check_grounding,
     judge_rows,
+    lineage_gold,
     load_run,
     read_human_grades,
+    score_lineage,
     score_trace,
     summarize,
     write_grades,
 )
 from kgrag_eval.theographic import (
     ALL_BOOKS,
+    apply_corrections,
     compute_gold_stats,
     load_gold,
     load_records,
@@ -403,25 +408,77 @@ def qa(
     run_id: str = typer.Option(..., "--run", help="Folder name under eval/runs."),
     judge_model: str = typer.Option("claude-sonnet-5-5"),
     judge_effort: str = typer.Option("medium"),
+    index_id: str = typer.Option("gen-v1", "--index"),
     run_budget_usd: float = typer.Option(1.0),
     workers: int = typer.Option(4),
 ) -> None:
-    """Score a run of eval/questions.yaml: LLM-judged accuracy, verse recall, citations, tokens, latency and cost."""
+    """Score a run of eval/questions.yaml: LLM-judged accuracy, family trees shown, sentences backed by sources, verse recall, tokens, latency and cost."""
     questions = {
         question["id"]: question
         for question in yaml.safe_load(
             (REPO_ROOT / "eval" / "questions.yaml").read_text(encoding="utf-8")
         )
     }
-    passage_verses = {
-        passage["id"]: passage["verse_refs"]
-        for passage in read_jsonl(CORPUS_DIR / "passages.jsonl")
+    passages = list(read_jsonl(CORPUS_DIR / "passages.jsonl"))
+    passage_verses = {passage["id"]: passage["verse_refs"] for passage in passages}
+    passage_text = {passage["id"]: passage["text"] for passage in passages}
+    verse_text = {
+        verse["osis_ref"]: verse["text"]
+        for verse in read_jsonl(CORPUS_DIR / "verses.jsonl")
     }
-    rows = [
-        score_trace(trace, questions[question_id], passage_verses)
-        for trace in load_run(REPO_ROOT / "eval" / "runs" / run_id)
-        for question_id in [trace_question_id(trace, questions)]
-    ]
+    corrections = (
+        yaml.safe_load(
+            (REPO_ROOT / "eval" / "gold_corrections.yaml").read_text(encoding="utf-8")
+        )
+        or {}
+    )
+    gold, _ = apply_corrections(load_gold(), corrections)
+    _, entities, _ = load_index(index_id)
+    gold_of_entity = majority(
+        align_mentions(entities, "person", gold.spans), "entity", "gold"
+    )
+    names_of: dict[str, set[str]] = defaultdict(set)
+    our_name_of = {}
+    for slug, person in gold.people_by_slug.items():
+        names_of[slug].add(person["name"])
+    for entity in entities:
+        if entity["id"] in gold_of_entity:
+            slug = gold_of_entity[entity["id"]]
+            our_name_of.setdefault(slug, entity["name"])
+            names_of[slug].update(
+                name
+                for name in [entity["name"], *entity["aliases"]]
+                if name[:1].isupper()
+            )
+
+    def display(slug: str) -> str:
+        name = gold.people_by_slug[slug]["name"]
+        ours = our_name_of.get(slug, name)
+        return name if ours == name else f"{name} ({ours})"
+
+    lineages = {}
+    for question in questions.values():
+        if "lineage" in question:
+            root = question["lineage"]["person"]
+            direction = question["lineage"]["direction"]
+            people, links = lineage_gold(gold, root, direction, FIXTURE_SCOPE)
+            lineages[question["id"]] = (root, people, links)
+            question["answer"] = (
+                f"The {direction} of {display(root)} named in Genesis ({len(people)} people): "
+                + ", ".join(sorted(display(slug) for slug in people))
+                + "."
+            )
+    pairs = []
+    for trace in load_run(REPO_ROOT / "eval" / "runs" / run_id):
+        question = questions[trace_question_id(trace, questions)]
+        row = score_trace(trace, question, passage_verses)
+        if question["id"] in lineages:
+            root, people, links = lineages[question["id"]]
+            row |= score_lineage(
+                trace, row["answer"], root, people, links, gold_of_entity, names_of
+            )
+        pairs.append((row, trace))
+    rows = [row for row, _ in pairs]
     ledger = Ledger()
     try:
         budget = Budget(run_budget_usd, project_budget_usd(), 0.10, ledger.total_cost())
@@ -435,13 +492,16 @@ def qa(
         purpose=JUDGE_PURPOSE,
     )
     judge_rows(client, rows, questions, workers)
+    check_grounding(client, pairs, verse_text, passage_text, workers)
     grades_path = REPO_ROOT / "eval" / "labels" / f"qa_grades_{run_id}.csv"
     human = read_human_grades(grades_path)
     write_grades(grades_path, rows, questions, human)
     summary = {
         "run": run_id,
         "judge": f"{judge_model} {judge_effort}",
-        "judge_cost_usd": round(sum(row["judge_cost_usd"] for row in rows), 4),
+        "judge_cost_usd": round(
+            sum(row["judge_cost_usd"] + row["grounding_cost_usd"] for row in rows), 4
+        ),
         **summarize(rows, human),
     }
     out_dir = REPO_ROOT / "eval" / "results" / "qa" / run_id

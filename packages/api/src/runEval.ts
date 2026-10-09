@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 import {
 	type RetrievalTrace,
 	runAgent,
@@ -26,8 +27,16 @@ interface Question {
 	question: string;
 }
 
-const questions = parse(readFileSync(QUESTIONS, "utf-8")) as Question[];
-const runId = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
+// --run adds to an existing run folder; --only limits the run to some question ids.
+const { values: options } = parseArgs({
+	options: { run: { type: "string" }, only: { type: "string" } },
+});
+const only = options.only?.split(",");
+const questions = (
+	parse(readFileSync(QUESTIONS, "utf-8")) as Question[]
+).filter((question) => !only || only.includes(question.id));
+const runId =
+	options.run ?? new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
 const jobs = questions.flatMap((question) =>
 	Object.entries(MODES).map(([mode, run]) => ({ mode, question, run })),
 );

@@ -322,10 +322,10 @@
    },
    "links": {
     "FATHER_OF": {
-     "precision": 0.8914,
-     "recall": 0.8293,
-     "f1": 0.8592,
-     "gold": 287
+     "precision": 0.8951,
+     "recall": 0.8357,
+     "f1": 0.8644,
+     "gold": 286
     },
     "MOTHER_OF": {
      "precision": 0.8,
@@ -645,10 +645,10 @@
    },
    "links": {
     "FATHER_OF": {
-     "precision": 0.97,
-     "recall": 0.9024,
-     "f1": 0.935,
-     "gold": 287
+     "precision": 0.9738,
+     "recall": 0.9091,
+     "f1": 0.9403,
+     "gold": 286
     },
     "MOTHER_OF": {
      "precision": 0.8333,

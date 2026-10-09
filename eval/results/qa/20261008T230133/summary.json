@@ -1,17 +1,18 @@
 {
  "run": "20261008T230133",
  "judge": "claude-sonnet-5-5 medium",
- "judge_cost_usd": 0.4667,
- "questions": 25,
+ "judge_cost_usd": 0.1813,
+ "questions": 35,
  "modes": {
   "agent": {
-   "accuracy": 0.92,
+   "accuracy": 0.8429,
    "verdicts": {
-    "correct": 22,
-    "partial": 2,
+    "correct": 25,
+    "partial": 9,
     "no_answer": 1
    },
    "by_category": {
+    "lineage": 0.65,
     "memory_trap": 1.0,
     "multi_hop": 1.0,
     "open": 0.625,
@@ -21,17 +22,25 @@
    "verse_recall": 0.8167,
    "cited_verse_recall": 0.7989,
    "invalid_citation_rate": 0.0,
-   "mean_input_tokens": 5853,
-   "mean_latency_s": 10.21,
-   "cost_usd": 0.0333,
-   "failed": 0
+   "mean_input_tokens": 6247,
+   "mean_latency_s": 11.78,
+   "cost_usd": 0.0547,
+   "failed": 0,
+   "grounded_rate": 0.7763,
+   "answer_name_recall": 0.7329,
+   "tree_people_recall": 0.7194,
+   "tree_people_precision": 0.9938,
+   "tree_link_recall": 0.7653,
+   "tree_link_precision": 0.9879
   },
   "closed_book": {
-   "accuracy": 1.0,
+   "accuracy": 0.9143,
    "verdicts": {
-    "correct": 25
+    "correct": 29,
+    "partial": 6
    },
    "by_category": {
+    "lineage": 0.7,
     "memory_trap": 1.0,
     "multi_hop": 1.0,
     "open": 1.0,
@@ -41,20 +50,27 @@
    "verse_recall": null,
    "cited_verse_recall": null,
    "invalid_citation_rate": null,
-   "mean_input_tokens": 1580,
-   "mean_latency_s": 5.17,
-   "cost_usd": 0.0105,
-   "failed": 0
+   "mean_input_tokens": 1581,
+   "mean_latency_s": 5.55,
+   "cost_usd": 0.0163,
+   "failed": 0,
+   "grounded_rate": 0.0,
+   "answer_name_recall": 0.7152,
+   "tree_people_recall": null,
+   "tree_people_precision": null,
+   "tree_link_recall": null,
+   "tree_link_precision": null
   },
   "vector": {
-   "accuracy": 0.66,
+   "accuracy": 0.6429,
    "verdicts": {
-    "correct": 16,
-    "no_answer": 7,
-    "partial": 1,
-    "wrong": 1
+    "correct": 21,
+    "no_answer": 9,
+    "partial": 3,
+    "wrong": 2
    },
    "by_category": {
+    "lineage": 0.6,
     "memory_trap": 0.8,
     "multi_hop": 0.5,
     "open": 0.625,
@@ -63,11 +79,17 @@
    },
    "verse_recall": 0.5422,
    "cited_verse_recall": 0.5422,
-   "invalid_citation_rate": 0.0,
-   "mean_input_tokens": 5083,
-   "mean_latency_s": 5.88,
-   "cost_usd": 0.0319,
-   "failed": 0
+   "invalid_citation_rate": 0.0217,
+   "mean_input_tokens": 5113,
+   "mean_latency_s": 7.64,
+   "cost_usd": 0.0478,
+   "failed": 0,
+   "grounded_rate": 0.971,
+   "answer_name_recall": 0.644,
+   "tree_people_recall": null,
+   "tree_people_precision": null,
+   "tree_link_recall": null,
+   "tree_link_precision": null
   }
  },
  "judge_vs_human": {

@@ -1,5 +1,6 @@
 # Genesis questions for the answer benchmark (M8).
-# Each has a short gold answer, the verses that state it and the answer-key people it names.
+# Each has a short gold answer, the verses that state it and the answer-key people it names,
+# except lineage questions, which name a person and a direction instead.
 # Drafted from the Theographic answer key and checked against the KJV text; review welcome.
 # Categories:
 #   single_hop   one family link
@@ -7,6 +8,8 @@
 #   path         how two people are related
 #   memory_trap  obscure genealogy where answering from memory tends to slip
 #   open         a happening or a reason, not a family link
+#   lineage      every ancestor or descendant named in Genesis; the reference list and the
+#                family tree it is graded against come from the corrected answer key
 
 - id: q01
   category: single_hop
@@ -182,3 +185,53 @@
   answer: He was sold to the Ishmeelites for twenty pieces of silver, after Judah urged his brothers to sell him rather than kill him; Midianite merchantmen were passing by. The KJV leaves open whether the brothers or the Midianites lifted him from the pit, so either seller counts.
   verses: [Gen.37.26, Gen.37.27, Gen.37.28]
   people: [joseph_1710]
+
+- id: q26
+  category: lineage
+  question: Who were the ancestors of Noah named in Genesis?
+  lineage: {person: noah_2210, direction: ancestors}
+
+- id: q27
+  category: lineage
+  question: Who were the ancestors of Abraham named in Genesis?
+  lineage: {person: abraham_58, direction: ancestors}
+
+- id: q28
+  category: lineage
+  question: Who were the ancestors of Joseph named in Genesis?
+  lineage: {person: joseph_1710, direction: ancestors}
+
+- id: q29
+  category: lineage
+  question: Who were the descendants of Cain named in Genesis?
+  lineage: {person: cain_533, direction: descendants}
+
+- id: q30
+  category: lineage
+  question: Who were the descendants of Japheth named in Genesis?
+  lineage: {person: japheth_726, direction: descendants}
+
+- id: q31
+  category: lineage
+  question: Who were the descendants of Ham named in Genesis?
+  lineage: {person: ham_1359, direction: descendants}
+
+- id: q32
+  category: lineage
+  question: Who were the descendants of Ishmael named in Genesis?
+  lineage: {person: ishmael_630, direction: descendants}
+
+- id: q33
+  category: lineage
+  question: Who were the descendants of Esau named in Genesis?
+  lineage: {person: esau_1216, direction: descendants}
+
+- id: q34
+  category: lineage
+  question: Who were the descendants of Jacob named in Genesis?
+  lineage: {person: israel_682, direction: descendants}
+
+- id: q35
+  category: lineage
+  question: Who were the descendants of Abraham named in Genesis?
+  lineage: {person: abraham_58, direction: descendants}

@@ -8,3 +8,15 @@ person_tag_removals:
   - slug: canaan_914
     name: Canaan
     phrase: land of Canaan
+
+# parent_removals: drop a parent from every record. The key gives God as the father of
+# Adam and Eve, following Luke 3:38; no Genesis verse states it as a family link.
+parent_removals:
+  - parent: god_1324
+
+# parent_overrides: set a person's parents to what Genesis states. Gen 11:12 says Arphaxad
+# begat Salah; the key follows Luke 3:36, which puts a second Cainan between them.
+parent_overrides:
+  - child: salah_2455
+    field: father
+    parents: [arphaxad_312]

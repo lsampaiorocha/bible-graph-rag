@@ -184,4 +184,24 @@ def apply_corrections(gold: Gold, corrections: dict) -> tuple[Gold, int]:
                 if not (span.kind == "person" and span.slug == rule["slug"])
             ]
             removed += 1
-    return replace(gold, verses=verses, spans=spans), removed
+    record_id_of = {
+        slug: record_id for record_id, slug in gold.person_slug_by_id.items()
+    }
+    people = dict(gold.people_by_slug)
+    for rule in corrections.get("parent_removals") or []:
+        parent_id = record_id_of[rule["parent"]]
+        for slug, person in people.items():
+            people[slug] = {
+                **person,
+                **{
+                    field: [p for p in person[field] if p != parent_id]
+                    for field in ("father", "mother")
+                    if person.get(field)
+                },
+            }
+    for rule in corrections.get("parent_overrides") or []:
+        people[rule["child"]] = {
+            **people[rule["child"]],
+            rule["field"]: [record_id_of[parent] for parent in rule["parents"]],
+        }
+    return replace(gold, verses=verses, spans=spans, people_by_slug=people), removed

@@ -1,4 +1,5 @@
-from kgrag_eval.score_qa import cohen_kappa, score_trace
+from kgrag_eval.score_qa import cohen_kappa, lineage_gold, score_lineage, score_trace
+from kgrag_eval.theographic import gold_from_records
 
 
 def test_score_trace_counts_gold_verses_inside_retrieved_passages():
@@ -59,3 +60,84 @@ def test_cohen_kappa_discounts_agreement_expected_by_chance():
 
     assert cohen_kappa(pairs) == 0.5
     assert cohen_kappa([]) is None
+
+
+def test_lineage_gold_follows_both_parents_and_stays_inside_genesis():
+    gold = gold_from_records(
+        verses={
+            "v1": {"osisRef": "Gen.5.6", "people": ["rA", "rV", "rS", "rN"]},
+            "v2": {"osisRef": "Luke.3.38", "people": ["rL"]},
+        },
+        people={
+            "rA": {"slug": "adam", "name": "Adam"},
+            "rV": {"slug": "eve", "name": "Eve"},
+            "rS": {"slug": "seth", "name": "Seth", "father": ["rA"], "mother": ["rV"]},
+            "rN": {"slug": "enos", "name": "Enos", "father": ["rS"]},
+            "rL": {"slug": "later", "name": "Later", "father": ["rN"]},
+        },
+        places={},
+        events={},
+    )
+
+    assert lineage_gold(gold, "enos", "ancestors", "Gen") == (
+        {"seth", "adam", "eve"},
+        {("adam", "seth"), ("eve", "seth"), ("seth", "enos")},
+    )
+    assert lineage_gold(gold, "adam", "descendants", "Gen") == (
+        {"seth", "enos"},
+        {("adam", "seth"), ("seth", "enos")},
+    )
+
+
+def test_score_lineage_grades_the_tree_the_graph_shows_and_the_names_in_the_answer():
+    trace = {
+        "query": {"mode": "agent"},
+        "nodes": [
+            {"id": "per_noah", "status": "cited"},
+            {"id": "per_lamech", "status": "context"},
+            {"id": "per_methuselah", "status": "cited"},
+            {"id": "per_enoch", "status": "candidate"},
+            {"id": "per_stranger", "status": "context"},
+        ],
+        "edges": [
+            {
+                "type": "FATHER_OF",
+                "status": "context",
+                "source": "per_lamech",
+                "target": "per_noah",
+            },
+            {
+                "type": "FATHER_OF",
+                "status": "cited",
+                "source": "per_methuselah",
+                "target": "per_lamech",
+            },
+            {
+                "type": "SPOUSE_OF",
+                "status": "cited",
+                "source": "per_lamech",
+                "target": "per_stranger",
+            },
+        ],
+    }
+
+    assert score_lineage(
+        trace,
+        "Noah's father was Lamech, the son of Methuselah.",
+        "noah",
+        {"lamech", "methuselah", "enoch"},
+        {("lamech", "noah"), ("methuselah", "lamech"), ("enoch", "methuselah")},
+        {
+            "per_noah": "noah",
+            "per_lamech": "lamech",
+            "per_methuselah": "methuselah",
+            "per_enoch": "enoch",
+        },
+        {"lamech": {"Lamech"}, "methuselah": {"Methuselah"}, "enoch": {"Enoch"}},
+    ) == {
+        "answer_name_recall": 2 / 3,
+        "tree_people_recall": 2 / 3,
+        "tree_people_precision": 2 / 3,
+        "tree_link_recall": 2 / 3,
+        "tree_link_precision": 1.0,
+    }

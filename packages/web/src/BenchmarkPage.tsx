@@ -95,6 +95,12 @@ interface QaMode {
 	mean_input_tokens: number;
 	mean_latency_s: number;
 	cost_usd: number;
+	grounded_rate: number;
+	answer_name_recall: number | null;
+	tree_people_recall: number | null;
+	tree_people_precision: number | null;
+	tree_link_recall: number | null;
+	tree_link_precision: number | null;
 }
 
 interface QaSummary {
@@ -134,8 +140,10 @@ function QaSection() {
 			<p className="mb-2 text-sm text-gray-600">
 				Same answering model and prompt in every column; only the retrieval
 				differs. Graded by {summary.judge} against reference answers (correct =
-				1, partial = ½). Verse recall = share of the reference verses that
-				reached the model.
+				1, partial = ½). Family rows cover the lineage questions, graded against
+				the answer key&apos;s family tree; the tree rows score the graph the
+				page draws, so only the graph agent has them. Verse recall = share of
+				the reference verses that reached the model.
 			</p>
 			<Table
 				head={["Measure", ...modes.map(([, label]) => label)]}
@@ -148,6 +156,26 @@ function QaSection() {
 					[
 						"Declined to answer",
 						...each((mode) => mode.verdicts.no_answer ?? 0),
+					],
+					[
+						"Sentences backed by their cited sources",
+						...each((mode) => pct(mode.grounded_rate)),
+					],
+					[
+						"Family lists: people named in the answer",
+						...each((mode) => orDash(mode.answer_name_recall)),
+					],
+					[
+						"Family tree shown: people found",
+						...each((mode) => orDash(mode.tree_people_recall)),
+					],
+					[
+						"Family tree shown: people that belong",
+						...each((mode) => orDash(mode.tree_people_precision)),
+					],
+					[
+						"Family tree shown: parent links found",
+						...each((mode) => orDash(mode.tree_link_recall)),
 					],
 					["Verse recall", ...each((mode) => orDash(mode.verse_recall))],
 					[

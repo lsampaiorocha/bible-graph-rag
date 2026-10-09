@@ -96,6 +96,7 @@ interface QaMode {
 	mean_latency_s: number;
 	cost_usd: number;
 	grounded_rate: number;
+	key_people_shown: number | null;
 	answer_name_recall: number | null;
 	tree_people_recall: number | null;
 	tree_people_precision: number | null;
@@ -160,6 +161,10 @@ function QaSection() {
 					[
 						"Sentences backed by their cited sources",
 						...each((mode) => pct(mode.grounded_rate)),
+					],
+					[
+						"Key people shown in the graph",
+						...each((mode) => orDash(mode.key_people_shown)),
 					],
 					[
 						"Family lists: people named in the answer",

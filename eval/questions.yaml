@@ -235,3 +235,38 @@
   category: lineage
   question: Who were the descendants of Abraham named in Genesis?
   lineage: {person: abraham_58, direction: descendants}
+
+- id: q36
+  category: path
+  question: How is Laban related to Lot?
+  answer: Lot's father Haran and Laban's grandfather Nahor were brothers, sons of Terah; Laban's father was Bethuel, son of Nahor. So Laban is the grandson of Lot's uncle Nahor (Lot's first cousin once removed).
+  verses: [Gen.11.27, Gen.24.15, Gen.24.29, Gen.28.5]
+  people: [laban_1803, lot_1830, haran_1407, nahor_2143, terah_2841, bethuel_487]
+
+- id: q37
+  category: path
+  question: How is Joseph related to Ishmael?
+  answer: Ishmael, Abraham's son by Hagar, was the half-brother of Isaac, Joseph's grandfather; so Ishmael is Joseph's great-uncle. Esau, Joseph's uncle, also married Ishmael's daughter Mahalath.
+  verses: [Gen.16.15, Gen.21.3, Gen.25.26, Gen.35.24, Gen.28.9]
+  people: [joseph_1710, israel_682, isaac_616, abraham_58, ishmael_630]
+
+- id: q38
+  category: path
+  question: How is Esau related to Laban?
+  answer: Laban is Esau's uncle, the brother of his mother Rebekah.
+  verses: [Gen.28.5]
+  people: [esau_1216, rebekah_2401, laban_1803]
+
+- id: q39
+  category: path
+  question: How is Rebekah related to Abraham?
+  answer: Rebekah was the granddaughter of Abraham's brother Nahor (through Bethuel), so Abraham's grandniece, and she married Abraham's son Isaac, which made her his daughter-in-law.
+  verses: [Gen.22.20, Gen.22.23, Gen.24.15, Gen.24.67]
+  people: [rebekah_2401, bethuel_487, nahor_2143, abraham_58, isaac_616]
+
+- id: q40
+  category: path
+  question: How is Lot connected to Melchizedek?
+  answer: Through Abram. Abram rescued his nephew Lot from the kings who had captured him, and on Abram's return Melchizedek, king of Salem and priest of the most high God, blessed Abram.
+  verses: [Gen.14.12, Gen.14.16, Gen.14.18, Gen.14.19]
+  people: [lot_1830, abraham_58, melchisedec_1991]

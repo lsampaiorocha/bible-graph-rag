@@ -1,4 +1,10 @@
-from kgrag_eval.score_qa import cohen_kappa, lineage_gold, score_lineage, score_trace
+from kgrag_eval.score_qa import (
+    cohen_kappa,
+    key_people_shown,
+    lineage_gold,
+    score_lineage,
+    score_trace,
+)
 from kgrag_eval.theographic import gold_from_records
 
 
@@ -141,3 +147,26 @@ def test_score_lineage_grades_the_tree_the_graph_shows_and_the_names_in_the_answ
         "tree_link_recall": 2 / 3,
         "tree_link_precision": 1.0,
     }
+
+
+def test_key_people_shown_counts_answer_key_people_in_the_drawn_graph_for_the_agent_only():
+    trace = {
+        "query": {"mode": "agent"},
+        "nodes": [
+            {"id": "per_lot", "status": "cited"},
+            {"id": "per_abram", "status": "context"},
+            {"id": "per_melchizedek", "status": "candidate"},
+        ],
+    }
+    gold_of_entity = {
+        "per_lot": "lot_1830",
+        "per_abram": "abraham_58",
+        "per_melchizedek": "melchisedec_1991",
+    }
+    people = ["lot_1830", "abraham_58", "melchisedec_1991"]
+
+    assert key_people_shown(trace, people, gold_of_entity) == 2 / 3
+    assert (
+        key_people_shown({**trace, "query": {"mode": "vector"}}, people, gold_of_entity)
+        is None
+    )

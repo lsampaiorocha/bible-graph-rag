@@ -23,6 +23,7 @@ from kgrag_eval.score_qa import (
     JUDGE_PURPOSE,
     check_grounding,
     judge_rows,
+    key_people_shown,
     lineage_gold,
     load_run,
     read_human_grades,
@@ -488,6 +489,10 @@ def qa(
     for trace in load_run(REPO_ROOT / "eval" / "runs" / run_id):
         question = questions[trace_question_id(trace, questions)]
         row = score_trace(trace, question, passage_verses)
+        if "people" in question:
+            row["key_people_shown"] = key_people_shown(
+                trace, question["people"], gold_of_entity
+            )
         if question["id"] in lineages:
             root, people, links = lineages[question["id"]]
             row |= score_lineage(

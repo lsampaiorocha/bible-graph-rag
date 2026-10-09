@@ -44,7 +44,8 @@ class JudgeVerdict(BaseModel):
 
 
 SHOWN = {"context", "cited"}
-LINEAGE_METRICS = [
+PER_QUESTION_METRICS = [
+    "key_people_shown",
     "answer_name_recall",
     "tree_people_recall",
     "tree_people_precision",
@@ -146,6 +147,19 @@ def score_lineage(
         "tree_link_recall": share(shown_links & links, links),
         "tree_link_precision": share(shown_links & links, shown_links),
     }
+
+
+def key_people_shown(
+    trace: dict, people: list[str], gold_of_entity: dict[str, str]
+) -> float | None:
+    if trace["query"]["mode"] != "agent":
+        return None
+    shown = {
+        gold_of_entity.get(node["id"])
+        for node in trace["nodes"]
+        if node["status"] in SHOWN
+    }
+    return share(set(people) & shown, set(people))
 
 
 def source_lines(
@@ -356,7 +370,7 @@ def summarize(rows: list[dict], human: dict[tuple[str, str], str]) -> dict:
             ),
             **{
                 metric: mean_or_none([row.get(metric) for row in mode_rows])
-                for metric in LINEAGE_METRICS
+                for metric in PER_QUESTION_METRICS
             },
         }
     pairs = [

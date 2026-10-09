@@ -146,6 +146,24 @@ export class Neo4jGraphSource implements GraphSource {
 		);
 	}
 
+	async corridor(
+		ids: string[],
+		reach: number,
+		types: readonly string[] | null,
+	): Promise<LinkRow[]> {
+		return this.rows<LinkRow>(
+			`MATCH (start:Entity) WHERE start.id IN $ids
+			 MATCH (start)((:Entity)-[r WHERE $types IS NULL OR type(r) IN $types]-(:Entity)){0,${reach}}(n:Entity)
+			 WITH collect(DISTINCT n) AS inside
+			 UNWIND inside AS a
+			 MATCH (a)-[e]->(b:Entity)
+			 WHERE b IN inside AND ($types IS NULL OR type(e) IN $types)
+			 ${LINK_RETURN}, 0 AS depth
+			 ORDER BY edgeId`,
+			{ ids, types },
+		);
+	}
+
 	async relatives(personId: string, relation: Relation): Promise<LinkRow[]> {
 		const gender =
 			{

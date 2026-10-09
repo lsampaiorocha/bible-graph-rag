@@ -77,6 +77,13 @@ export interface LinkRow {
 	depth: number;
 }
 
+export const KIN_TYPES = [
+	"FATHER_OF",
+	"MOTHER_OF",
+	"SIBLING_OF",
+	"SPOUSE_OF",
+] as const;
+
 export type LineageDirection = "ancestors" | "descendants";
 export const RELATIONS = [
 	"father",
@@ -113,6 +120,13 @@ export interface GraphSource {
 	// Direct family links of one kind; siblings also come through a shared parent,
 	// returned as that parent's two links (depth 1 to the person, 2 to the sibling).
 	relatives(personId: string, relation: Relation): Promise<LinkRow[]>;
+	// Links among the entities within `reach` links of any given id, optionally only of
+	// the given types: the corridor a path between those ids can run through.
+	corridor(
+		ids: string[],
+		reach: number,
+		types: readonly string[] | null,
+	): Promise<LinkRow[]>;
 	// Nearest entities to a vector, ordered by score descending then nodeId.
 	seedsByVector(vector: number[], limit: number): Promise<VectorHit[]>;
 	similarities(
@@ -263,6 +277,40 @@ export class MemoryGraphSource implements GraphSource {
 			frontier = next;
 		}
 		return this.linkRows(depthByEdge).slice(0, MAX_LINEAGE_LINKS);
+	}
+
+	async corridor(
+		ids: string[],
+		reach: number,
+		types: readonly string[] | null,
+	): Promise<LinkRow[]> {
+		const allowed = this.graph.edges.filter(
+			(edge) => !types || types.includes(edge.type),
+		);
+		const inside = new Set(ids);
+		let frontier = [...inside];
+		for (let step = 0; step < reach && frontier.length > 0; step++) {
+			const next: string[] = [];
+			for (const edge of allowed) {
+				for (const [near, far] of [
+					[edge.source, edge.target],
+					[edge.target, edge.source],
+				] as const) {
+					if (frontier.includes(near) && !inside.has(far)) {
+						inside.add(far);
+						next.push(far);
+					}
+				}
+			}
+			frontier = next;
+		}
+		return this.linkRows(
+			new Map(
+				allowed
+					.filter((edge) => inside.has(edge.source) && inside.has(edge.target))
+					.map((edge) => [edge.id, 0]),
+			),
+		);
 	}
 
 	async relatives(personId: string, relation: Relation): Promise<LinkRow[]> {

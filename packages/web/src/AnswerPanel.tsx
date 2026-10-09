@@ -6,6 +6,7 @@ const TOOL_LABELS: Record<string, string> = {
 	ancestors: "ancestors",
 	descendants: "descendants",
 	relatives: "relatives",
+	path: "path",
 };
 
 interface AnswerPanelProps {
@@ -68,6 +69,8 @@ export function AnswerPanel({ trace, labelById, onSelect }: AnswerPanelProps) {
 								? label(step.entity_id)
 								: String(step.args.entity)}
 							{step.args.relation ? `, ${step.args.relation}` : ""}
+							{step.args.other ? `, ${label(String(step.args.other))}` : ""}
+							{step.args.family_only ? ", family only" : ""}
 							{step.args.generations
 								? `, ${step.args.generations} generations`
 								: ""}

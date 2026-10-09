@@ -79,6 +79,7 @@ export const TraceStep = z.object({
 		"ancestors",
 		"descendants",
 		"relatives",
+		"path",
 	]),
 	args: z.record(z.string(), z.union([z.string(), z.number()])),
 	entity_id: z.string().optional(),
@@ -145,4 +146,5 @@ export type TraceEdge = z.infer<typeof TraceEdge>;
 export type TraceStep = z.infer<typeof TraceStep>;
 export type TraceChunk = z.infer<typeof TraceChunk>;
 export type Answer = z.infer<typeof Answer>;
+export type TracePath = z.infer<typeof TracePath>;
 export type RetrievalTrace = z.infer<typeof RetrievalTrace>;

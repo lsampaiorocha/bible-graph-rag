@@ -1,6 +1,12 @@
 import { questionNgrams } from "../aliases.ts";
 import { compareText, type GraphSource } from "../graphSource.ts";
-import type { RetrievalTrace, Seed, TraceEdge, TraceNode } from "../trace.ts";
+import type {
+	RetrievalTrace,
+	Seed,
+	TraceEdge,
+	TraceNode,
+	TracePath,
+} from "../trace.ts";
 
 export interface LocalParams {
 	maxHops: number;
@@ -55,6 +61,7 @@ export interface Subgraph {
 	nodes: Map<string, TraceNode>;
 	edges: Map<string, TraceEdge>;
 	degrees?: Map<string, number>;
+	paths?: TracePath[];
 }
 
 export async function expandFrom(

@@ -61,8 +61,17 @@ export const PLAN_SCHEMA = {
 						minimum: 1,
 						maximum: MAX_LINEAGE_DEPTH,
 					}),
+					other: nullable({ type: "string" }),
+					family_only: nullable({ type: "boolean" }),
 				},
-				required: ["tool", "entity", "relation", "generations"],
+				required: [
+					"tool",
+					"entity",
+					"relation",
+					"generations",
+					"other",
+					"family_only",
+				],
 				additionalProperties: false,
 			},
 		},
@@ -99,12 +108,13 @@ Tools (entity = an entity id from the list you are given, or a name):
 - descendants(entity, generations): a person's children, grandchildren and so on.
 - relatives(entity, relation): one kind of direct family tie; relation is one of ${RELATIONS.join(", ")}.
 - explore(entity): everything closely linked to an entity: people, places, events. Use for open questions such as what happened, who someone was, why something happened.
+- path(entity, other, family_only): the shortest chains of links joining two entities, avoiding hubs such as God. With family_only true it follows only parent, sibling and spouse links, up to 6; otherwise any links, up to 4. Use for how one person or place is related or connected to another; family_only for kinship. Always set both entity and other.
 - find_entity(entity): list every entity with that name. Use when the question could mean several people with the same name and the list does not settle it.
 
 Rules:
 - Prefer the most specific tool: a family question goes to ancestors, descendants or relatives, not explore.
 - When several entities share a name, pick the id whose description fits the question.
-- Set relation only for relatives and generations only for ancestors or descendants; otherwise null.
+- Set relation only for relatives, generations only for ancestors or descendants, and other and family_only only for path; otherwise null.
 - Leave generations null to get every generation; set a number only when the question limits it (children = 1, grandchildren = 2).
 - If a previous round is shown, use it to fix what failed (an ambiguous name, nothing found); do not repeat a call that worked.`;
 
@@ -214,8 +224,20 @@ export async function runAgent(
 		const roundStarted = performance.now();
 		const calls = await plan(steps, MAX_TOOL_CALLS - steps.length);
 		timings[`plan_${round + 1}`] = Math.round(performance.now() - roundStarted);
-		for (const call of calls) {
+		for (const planned of calls) {
 			if (steps.length >= MAX_TOOL_CALLS) break;
+			// The planner often leaves other empty on path even with both entities listed;
+			// the other entity named in the question is the one it means.
+			const call =
+				planned.tool === "path" && !planned.other
+					? {
+							...planned,
+							other:
+								seeds
+									.map(({ seed }) => seed.node_id)
+									.find((id) => id !== planned.entity) ?? null,
+						}
+					: planned;
 			steps.push(
 				await executeCall(
 					source,
@@ -295,7 +317,14 @@ export async function runAgent(
 		steps,
 		nodes,
 		edges,
-		paths: [],
+		paths: (subgraph.paths ?? []).map((path) => ({
+			...path,
+			status: path.edge_ids.every(
+				(id) => edges.find((edge) => edge.id === id)?.status === "cited",
+			)
+				? ("cited" as const)
+				: path.status,
+		})),
 		communities: [],
 		chunks: context.chunks,
 		context: {

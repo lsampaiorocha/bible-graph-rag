@@ -2,6 +2,7 @@ import { aliasKey } from "./aliases.ts";
 import {
 	type Embedder,
 	type GraphSource,
+	KIN_TYPES,
 	type LinkRow,
 	MAX_LINEAGE_DEPTH,
 	RELATIONS,
@@ -13,6 +14,11 @@ import {
 	type SeedMatch,
 	type Subgraph,
 } from "./modes/local.ts";
+import {
+	FAMILY_PATH_MAX_LINKS,
+	PATH_MAX_LINKS,
+	shortestPaths,
+} from "./paths.ts";
 import { rankSubgraph } from "./rank.ts";
 import type { TraceStep } from "./trace.ts";
 
@@ -22,6 +28,7 @@ export const TOOLS = [
 	"ancestors",
 	"descendants",
 	"relatives",
+	"path",
 ] as const;
 export type ToolName = (typeof TOOLS)[number];
 export const MAX_TOOL_CALLS = 3;
@@ -39,6 +46,8 @@ export interface ToolCall {
 	entity: string;
 	relation?: Relation | null;
 	generations?: number | null;
+	other?: string | null;
+	family_only?: boolean | null;
 }
 
 const ENTITY_ID = /^(per|pla|grp|evt)_[a-z0-9_]+$/;
@@ -177,8 +186,11 @@ export async function executeCall(
 	const args: Record<string, string | number> = { entity: call.entity };
 	if (call.relation) args.relation = call.relation;
 	if (call.generations) args.generations = call.generations;
+	if (call.other) args.other = call.other;
+	if (call.family_only) args.family_only = "yes";
 	const resolution = await resolveEntity(source, call, context);
 	const touched = { nodes: new Set<string>(), edges: new Set<string>() };
+	let pathNote: string | undefined;
 
 	if (resolution.id && resolution.label) {
 		const root = { id: resolution.id, label: resolution.label };
@@ -227,6 +239,43 @@ export async function executeCall(
 				}
 				touched.edges.add(id);
 			}
+		} else if (call.tool === "path") {
+			const other: Resolution = call.other
+				? await resolveEntity(source, { ...call, entity: call.other }, context)
+				: { candidates: [], note: "path needs other, the second entity" };
+			if (other.id) {
+				const maxLinks = call.family_only
+					? FAMILY_PATH_MAX_LINKS
+					: PATH_MAX_LINKS;
+				const rows = await source.corridor(
+					[root.id, other.id],
+					Math.ceil(maxLinks / 2),
+					call.family_only ? KIN_TYPES : null,
+				);
+				const found = shortestPaths(rows, root.id, other.id, maxLinks);
+				if (found.length === 0) pathNote = `no path within ${maxLinks} links`;
+				const used = new Set(found.flatMap((path) => path.edgeIds));
+				const pathRows = rows.filter((row) => used.has(row.edgeId));
+				addLinks(into, pathRows, root);
+				const ranked = into.paths?.length ?? 0;
+				into.paths = [
+					...(into.paths ?? []),
+					...found.map((path, rank) => ({
+						rank: ranked + rank + 1,
+						cost: path.cost,
+						status: "context" as const,
+						node_ids: path.nodeIds,
+						edge_ids: path.edgeIds,
+					})),
+				];
+				for (const row of pathRows) {
+					touched.nodes.add(row.source);
+					touched.nodes.add(row.target);
+					touched.edges.add(row.edgeId);
+				}
+			} else {
+				pathNote = other.note;
+			}
 		} else {
 			const rows =
 				call.tool === "relatives"
@@ -261,6 +310,7 @@ export async function executeCall(
 	if (resolution.candidates.length) step.candidates = resolution.candidates;
 	const note =
 		resolution.note ??
+		pathNote ??
 		(touched.edges.size === 0 && call.tool !== "find_entity"
 			? "no links found"
 			: undefined);
@@ -268,6 +318,9 @@ export async function executeCall(
 	return step;
 }
 
+const CONNECTION_WORDS =
+	/\b(related|relation|relationship|connected|connection|kin)\b/;
+const KINSHIP_WORDS = /\b(related|relation|relationship|kin)\b/;
 const ANCESTOR_WORDS =
 	/\b(ancestors?|ancestry|forefathers?|fathers? of .+ fathers?|lineage|genealogy|family line|descended from|line of)\b/;
 const DESCENDANT_WORDS =
@@ -296,6 +349,16 @@ export function planByKeywords(
 	const subject = people[0] ?? seeds[0];
 	if (!subject) return [];
 	const entity = subject.seed.node_id;
+	const [first, second] = seeds;
+	if (first && second && CONNECTION_WORDS.test(text))
+		return [
+			{
+				tool: "path",
+				entity: first.seed.node_id,
+				other: second.seed.node_id,
+				family_only: KINSHIP_WORDS.test(text),
+			},
+		];
 	if (people.length && ANCESTOR_WORDS.test(text))
 		return [{ tool: "ancestors", entity }];
 	if (people.length && DESCENDANT_WORDS.test(text))

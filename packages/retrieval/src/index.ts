@@ -4,6 +4,7 @@ export * from "./context.ts";
 export * from "./graphSource.ts";
 export * from "./modes/baselines.ts";
 export * from "./modes/local.ts";
+export * from "./paths.ts";
 export * from "./ppr.ts";
 export * from "./rank.ts";
 export * from "./tools.ts";

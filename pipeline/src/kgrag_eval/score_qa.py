@@ -201,7 +201,6 @@ def check_grounding(
         sentences = (trace["answer"] or {}).get("sentences", [])
         row["sentences"] = len(sentences)
         row["grounded_sentences"] = 0
-        row["grounding_cost_usd"] = 0.0
         cited = [
             (index, sentence)
             for index, sentence in enumerate(sentences)
@@ -232,7 +231,6 @@ def check_grounding(
             for verdict in result.output["sentences"]
             if verdict["index"] in asked
         )
-        row["grounding_cost_usd"] = 0.0 if result.cached else result.usage.cost_usd
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(check, pairs))
@@ -303,7 +301,6 @@ def judge_rows(
         )
         row["judge"] = result.output["verdict"]
         row["judge_reason"] = result.output["reason"]
-        row["judge_cost_usd"] = 0.0 if result.cached else result.usage.cost_usd
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(judge, rows))

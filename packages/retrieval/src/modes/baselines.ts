@@ -66,6 +66,10 @@ export async function runVector(
 			highlight_entity_ids: [],
 		};
 	});
+	// The passage text carries [Gen.x.y] verse markers and the model often cites those;
+	// they point into a passage it was given, so they count as citing that passage.
+	for (const passage of passages)
+		for (const ref of passage.verseRefs) handles[ref] = passage.id;
 	const context = passages
 		.map((passage, index) => `[C${index + 1}] ${passage.id}\n${passage.text}`)
 		.join("\n\n");

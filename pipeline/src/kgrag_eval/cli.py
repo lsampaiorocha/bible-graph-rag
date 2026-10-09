@@ -521,7 +521,12 @@ def qa(
         "run": run_id,
         "judge": f"{judge_model} {judge_effort}",
         "judge_cost_usd": round(
-            sum(row["judge_cost_usd"] + row["grounding_cost_usd"] for row in rows), 4
+            sum(
+                row.get("cost_usd", 0.0)
+                for row in ledger.rows()
+                if row["run_id"] == f"qa-{run_id}"
+            ),
+            4,
         ),
         **summarize(rows, human),
     }

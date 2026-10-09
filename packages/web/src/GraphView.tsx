@@ -100,7 +100,6 @@ function buildFocusedGraph(
 	trace: RetrievalTrace,
 	kindById: Map<string, string>,
 ) {
-	const hopById = new Map(trace.nodes.map((node) => [node.id, node.hop]));
 	const edgeById = new Map(trace.edges.map((edge) => [edge.id, edge]));
 	const seedIds = new Set(trace.seeds.map((seed) => seed.node_id));
 	const nodes: GraphNode[] = trace.nodes.map((node) => {
@@ -119,25 +118,17 @@ function buildFocusedGraph(
 			status: node.status,
 		};
 	});
-	const links: GraphLink[] = trace.edges.map((edge) => {
-		// Point every link away from the seed so the particles show activation spreading.
-		const forward =
-			(hopById.get(edge.source) ?? 0) <= (hopById.get(edge.target) ?? 0);
-		const [sourceId, targetId] = forward
-			? [edge.source, edge.target]
-			: [edge.target, edge.source];
-		return {
-			id: edge.id,
-			type: edge.type,
-			fromId: edge.source,
-			toId: edge.target,
-			sourceId,
-			targetId,
-			source: sourceId,
-			target: targetId,
-			status: edge.status,
-		};
-	});
+	const links: GraphLink[] = trace.edges.map((edge) => ({
+		id: edge.id,
+		type: edge.type,
+		fromId: edge.source,
+		toId: edge.target,
+		sourceId: edge.source,
+		targetId: edge.target,
+		source: edge.source,
+		target: edge.target,
+		status: edge.status,
+	}));
 	return {
 		nodes,
 		links,
@@ -146,6 +137,12 @@ function buildFocusedGraph(
 }
 
 const WHOLE_GRAPH_LABELS = 30;
+// Two-way family ties get a line style instead of an arrow; every other link points
+// from its source to its target (parent to child, person to event, event to place).
+const LINK_DASH: Record<string, number[]> = {
+	SPOUSE_OF: [6, 4],
+	SIBLING_OF: [1.5, 3],
+};
 const RADIAL_TREE_NODES = 40;
 // The tightest zoom the label spacing adapts to; past it a wide tree would only keep
 // widening, as more spacing makes the fit zoom out further.
@@ -337,16 +334,15 @@ export function GraphView({
 			? trace.steps[0]?.tool
 			: undefined;
 	// A family line reads as a tree: ancestors stack upwards, descendants downwards.
-	// A wide descendant tree fits far better as rings around the ancestor than as rows.
+	// A family line reads as a tree with parents above children; a wide descendant tree
+	// fits far better as rings around the ancestor.
 	const dagMode =
-		mode !== "focused"
+		mode !== "focused" || (lineage !== "ancestors" && lineage !== "descendants")
 			? undefined
 			: lineage === "descendants" &&
 					(focused?.nodes.length ?? 0) > RADIAL_TREE_NODES
 				? "radialout"
-				: ({ ancestors: "bu", descendants: "td" } as const)[
-						lineage as "ancestors" | "descendants"
-					];
+				: "td";
 	const shown = (status: VizStatus) =>
 		status === "cited" || status === "context";
 	// Once an answer exists, what it cites stays bright and what was only retrieved dims.
@@ -360,6 +356,13 @@ export function GraphView({
 		link.status ??
 		traceEdgeStatus.get(link.id) ??
 		(trace ? "unreached" : "context");
+	const linkColorOf = (link: GraphLink) =>
+		({
+			cited: "#1d4ed8",
+			context: hasAnswer ? "#cbd5e1" : "#64748b",
+			candidate: "#d6dbe2",
+			unreached: "rgba(15,23,42,0.05)",
+		})[linkStatusOf(link)];
 	const radiusOf = (node: GraphNode) => {
 		if (isSeed(node)) return 9;
 		const status = statusOf(node);
@@ -378,7 +381,14 @@ export function GraphView({
 	};
 
 	return (
-		<div ref={ref} className="h-full w-full">
+		<div ref={ref} className="relative h-full w-full">
+			{mode === "focused" && trace && (
+				<div className="pointer-events-none absolute bottom-3 left-3 z-10 flex gap-3 rounded bg-white/85 px-2 py-1 text-[11px] text-gray-600">
+					<span>→ parent to child, or who/what to which</span>
+					<span>╌ married</span>
+					<span>┈ siblings</span>
+				</div>
+			)}
 			{width > 0 && (
 				<ForceGraph2D<VizNode, VizLink>
 					ref={graphRef}
@@ -465,33 +475,20 @@ export function GraphView({
 						context.fillStyle = color;
 						context.fill();
 					}}
-					linkColor={(link) =>
-						({
-							cited: "#1d4ed8",
-							context: hasAnswer ? "#cbd5e1" : "#64748b",
-							candidate: "#d6dbe2",
-							unreached: "rgba(15,23,42,0.05)",
-						})[linkStatusOf(link)]
-					}
+					linkColor={linkColorOf}
 					linkWidth={(link) =>
 						({ cited: 2.2, context: 1.6, candidate: 0.6, unreached: 0.6 })[
 							linkStatusOf(link)
 						]
 					}
-					linkLineDash={(link) =>
-						linkStatusOf(link) === "candidate" ? [3, 3] : null
-					}
+					linkLineDash={(link) => LINK_DASH[link.type] ?? null}
+					linkDirectionalArrowLength={(link) => (LINK_DASH[link.type] ? 0 : 5)}
+					linkDirectionalArrowRelPos={1}
+					linkDirectionalArrowColor={linkColorOf}
+					nodeRelSize={6}
 					linkLabel={(link) =>
 						`${escapeHtml(labelById.get(link.fromId) ?? link.fromId)} —${link.type}→ ${escapeHtml(labelById.get(link.toId) ?? link.toId)}`
 					}
-					linkDirectionalParticles={(link) =>
-						mode === "focused" &&
-						linkStatusOf(link) === (hasAnswer ? "cited" : "context")
-							? 2
-							: 0
-					}
-					linkDirectionalParticleWidth={2.5}
-					linkDirectionalParticleSpeed={0.008}
 					onNodeClick={(node) => onSelect(String(node.id))}
 					onBackgroundClick={() => onSelect(null)}
 				/>
